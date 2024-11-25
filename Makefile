@@ -6,13 +6,18 @@ CFLAGS += \
 	-DPF_HAVE_HLE_BIOS=0 \
 	-DPF_SOUND_FREQUENCY=22050 \
 	-DPF_ROMC=0 \
-	-O2 -funroll-loops
+	-DPRESS_F_ULTRA_PREVIEW=1 \
+	-O2 -funroll-loops \
+	-std=c89 -Wall -Wextra
 
 BUILD_DIR = build
 SRC_DIR = src
 include $(N64_INST)/include/n64.mk
 
-OBJS = $(BUILD_DIR)/src/main.o \
+OBJS = \
+	$(BUILD_DIR)/src/emu.o \
+	$(BUILD_DIR)/src/main.o \
+	$(BUILD_DIR)/src/menu.o \
 	$(BUILD_DIR)/src/libpressf/src/debug.o \
 	$(BUILD_DIR)/src/libpressf/src/dma.o \
 	$(BUILD_DIR)/src/libpressf/src/emu.o \
