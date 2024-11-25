@@ -1,52 +1,10 @@
 #include <libdragon.h>
 
 #include "libpressf/src/emu.h"
+#include "libpressf/src/font.h"
 
 #include "main.h"
 #include "menu.h"
-
-#define PFU_MENU_MAX_ENTRIES 64
-#define PFU_MENU_MAX_CHOICES 8
-
-typedef enum
-{
-  PFU_ENTRY_KEY_NONE = 0,
-
-  PFU_ENTRY_KEY_PIXEL_PERFECT,
-  PFU_ENTRY_KEY_SYSTEM_MODEL,
-
-  PFU_ENTRY_KEY_SIZE
-} pfu_entry_key;
-
-typedef enum
-{
-  PFU_ENTRY_TYPE_NONE = 0,
-
-  PFU_ENTRY_TYPE_BACK,
-  PFU_ENTRY_TYPE_FILE,
-  PFU_ENTRY_TYPE_BOOL,
-  PFU_ENTRY_TYPE_CHOICE,
-
-  PFU_ENTRY_TYPE_SIZE
-} pfu_entry_type;
-
-typedef struct
-{
-  char title[256];
-  char choices[PFU_MENU_MAX_CHOICES][16];
-  pfu_entry_key key;
-  pfu_entry_type type;
-} pfu_menu_entry_t;
-
-typedef struct
-{
-  /** @todo reasonable maximum */
-  pfu_menu_entry_t entries[PFU_MENU_MAX_ENTRIES];
-  char menu_title[256];
-  char menu_subtitle[256];
-  int entry_count;
-  int cursor;
-} pfu_menu_ctx_t;
 
 int pfu_load_rom(unsigned address, const char *path)
 {
@@ -85,7 +43,7 @@ int pfu_load_rom(unsigned address, const char *path)
   return 0;
 }
 
-void pfu_menu_option_bool(pfu_entry_key key, bool value)
+static void pfu_menu_option_bool(pfu_entry_key key, bool value)
 {
   switch (key)
   {
@@ -97,7 +55,7 @@ void pfu_menu_option_bool(pfu_entry_key key, bool value)
   }
 }
 
-void pfu_menu_option_choice(pfu_entry_key key, int value)
+static void pfu_menu_option_choice(pfu_entry_key key, unsigned value)
 {
   switch (key)
   {
@@ -113,37 +71,68 @@ void pfu_menu_option_choice(pfu_entry_key key, int value)
     case 2:
       emu.system.cycles = F8_CLOCK_CHANNEL_F_PAL_GEN_2;
       break;
-    default:
+    }
+    break;
+  case PFU_ENTRY_KEY_FONT:
+    switch (value)
+    {
+    case 0:
+      font_load(&emu.system, FONT_FAIRCHILD);
+      break;
+    case 1:
+      font_load(&emu.system, FONT_CUTE);
+      break;
+    case 2:
+      font_load(&emu.system, FONT_SKINNY);
       break;
     }
     break;
-  default:
+  default:  
     break;
   }
 }
 
-bool pfu_menu_init_options(void)
+static void pfu_menu_file(const char *path)
+{
+  if (path)
+  {
+    pfu_load_rom(0x0800, path);
+    pfu_state_set(PFU_STATE_EMU);
+  }
+}
+
+bool pfu_menu_init_settings(void)
 {
   pfu_menu_ctx_t menu;
   pfu_menu_entry_t *entry;
 
   memset(&menu, 0, sizeof(menu));
 
-  snprintf(menu.menu_title, sizeof(menu.menu_title), "%s",
-           "Press F Ultra - Settings");
-  snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s",
-           "Select a setting to change.");
+  snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - Settings");
+  snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a setting to change.");
 
   entry = &menu.entries[0];
-  snprintf(entry->title, sizeof(entry->key), "%s", "Pixel Perfect Scaling");
+  entry->key = PFU_ENTRY_KEY_PIXEL_PERFECT;
   entry->type = PFU_ENTRY_TYPE_BOOL;
+  snprintf(entry->title, sizeof(entry->title), "%s", "Pixel-perfect scaling");
 
   entry = &menu.entries[1];
-  snprintf(entry->title, sizeof(entry->key), "%s", "System Model");
+  entry->key = PFU_ENTRY_KEY_SYSTEM_MODEL;
+  entry->type = PFU_ENTRY_TYPE_CHOICE;
+  snprintf(entry->title, sizeof(entry->title), "%s", "System CPU clock");
   snprintf(entry->choices[0], sizeof(entry->choices[0]), "%s", "NTSC (1.79 MHz)");
   snprintf(entry->choices[1], sizeof(entry->choices[1]), "%s", "PAL Gen I (2.00 MHz)");
   snprintf(entry->choices[2], sizeof(entry->choices[2]), "%s", "PAL Gen II (1.97 MHz)");
+
+  entry = &menu.entries[2];
+  entry->key = PFU_ENTRY_KEY_FONT;
   entry->type = PFU_ENTRY_TYPE_CHOICE;
+  snprintf(entry->title, sizeof(entry->title), "%s", "System font");
+  snprintf(entry->choices[0], sizeof(entry->choices[0]), "%s", "Fairchild");
+  snprintf(entry->choices[1], sizeof(entry->choices[1]), "%s", "Cute");
+  snprintf(entry->choices[2], sizeof(entry->choices[2]), "%s", "Skinny");
+
+  menu.entry_count = 3;
 
   return true;
 }
@@ -156,12 +145,11 @@ bool pfu_menu_init_roms(void)
     pfu_menu_ctx_t menu;
     int err = dir_findfirst("sd:/press-f", &dir);
     int count = 1;
-    bool finished = false;
 
     /* Set up dummy file entry to not load a ROM */
-    snprintf(menu.entries[0].title, sizeof(menu.entries[0].key), "%s",
-             "Boot to BIOS");
+    snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS");
     menu.entries[0].type = PFU_ENTRY_TYPE_BACK;
+    menu.entries[0].key = PFU_ENTRY_KEY_NONE;
 
     while (!err)
     {
@@ -181,8 +169,9 @@ bool pfu_menu_init_roms(void)
         else if (strlen(dir.d_name) && dir.d_name[0] != '.')
         {
           /* List all other files */
-          snprintf(menu.entries[count].key, sizeof(dir.d_name), "%s", dir.d_name);
+          snprintf(menu.entries[count].title, sizeof(dir.d_name), "%s", dir.d_name);
           menu.entries[count].type = PFU_ENTRY_TYPE_FILE;
+          menu.entries[count].key = PFU_ENTRY_KEY_NONE;
           count++;
         }
       }
@@ -190,14 +179,12 @@ bool pfu_menu_init_roms(void)
     }
 
     /* Fail if BIOS are not located */
-    if (bios_a_size && bios_b_size)
+    if (emu.bios_a_loaded && emu.bios_b_loaded)
     {
       menu.entry_count = count;
       menu.cursor = 0;
-      snprintf(menu.menu_title, sizeof(menu.menu_title), "%s",
-               "Press F Ultra - ROMs");
-      snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s",
-               "Select a ROM to load.");
+      snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
+      snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
 
       return true;
     }
@@ -211,28 +198,34 @@ void pfu_menu_run(void)
 {
 #if 0 /** @todo PRESS_F_ULTRA_PREVIEW */
 #else
+  /** 
+   * This is the codepath for the old console-based menu. Only the ROM
+   * selection menu is implemented here, and will be removed in the future.
+   */
+  bool finished = false;
+
   console_init();
   console_set_render_mode(RENDER_MANUAL);
+  pfu_menu_init_roms();
 
   do
   {
     /* Process menu controller logic */
     struct controller_data keys;
-    bool finished = false;
     int i;
 
     controller_scan();
     keys = get_keys_down();
 
-    if (keys.c[0].up && menu.cursor > 0)
-      menu.cursor--;
-    else if (keys.c[0].down && menu.cursor < menu.entry_count - 1)
-      menu.cursor++;
+    if (keys.c[0].up && emu.menu.cursor > 0)
+      emu.menu.cursor--;
+    else if (keys.c[0].down && emu.menu.cursor < emu.menu.entry_count - 1)
+      emu.menu.cursor++;
     else if (keys.c[0].A)
     {
-      if (menu.entries[menu.cursor].type == PFU_ENTRY_TYPE_FILE)
-        pfu_load_rom(0x0800, menu.entries[menu.cursor].key);
-      else if (menu.entries[menu.cursor].type == PFU_ENTRY_TYPE_BACK)
+      if (emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_FILE)
+        pfu_load_rom(0x0800, emu.menu.entries[emu.menu.cursor].title);
+      else if (emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_BACK)
       {
         /* Zero some data so it doesn't persist between boots */
         int dummy = 0;
@@ -244,9 +237,10 @@ void pfu_menu_run(void)
     /* Render menu entries */
     console_clear();
     printf("\n\n");
-    for (i = 0; i < menu.entry_count; i++)
-      printf("%c %s\n", i == menu.cursor ? '>' : '-', menu.entries[i].key);
+    for (i = 0; i < emu.menu.entry_count; i++)
+      printf("%c %s\n", i == emu.menu.cursor ? '>' : '-', emu.menu.entries[i].title);
     console_render();
   } while (!finished);
+  pfu_state_set(PFU_STATE_EMU);
 #endif
 }

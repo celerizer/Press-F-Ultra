@@ -81,6 +81,7 @@ int main(void)
     f8_write(&emu.system, 0x0400, bios_b, bios_b_size);
   if (rom_size)
     f8_write(&emu.system, 0x0800, rom, rom_size);
+  emu.state = PFU_STATE_MENU;
 
   while (64)
   {

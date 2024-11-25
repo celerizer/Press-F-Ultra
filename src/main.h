@@ -3,6 +3,8 @@
 
 #include "libpressf/src/emu.h"
 
+#include "menu.h"
+
 typedef enum
 {
   PFU_SCALING_1_1 = 0,
@@ -30,6 +32,7 @@ typedef struct
   f8_system_t system;
   bool bios_a_loaded;
   bool bios_b_loaded;
+  pfu_menu_ctx_t menu;
 } pfu_emu_ctx_t;
 
 extern pfu_emu_ctx_t emu;
