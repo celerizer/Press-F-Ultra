@@ -311,7 +311,7 @@ void pfu_menu_run(void)
   rdpq_set_mode_fill(RGBA32(sine_color, sine_color, 0x00, 1));
   rdpq_fill_rectangle(48 + 4, 32 + 64 + (menu->cursor % PFU_ROWS) * 24 + 6, display_get_width() - (48 + 4), 32 + 64 + (menu->cursor % PFU_ROWS) * 24 + 24 + 6);
 
-  rdpq_set_mode_copy(true);
+  rdpq_set_mode_copy(false);
 
   rdpq_sprite_blit(emu.icon, 48, 32, NULL);
 
@@ -319,11 +319,21 @@ void pfu_menu_run(void)
   rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24 * 2, menu->menu_subtitle);
   for (i = (menu->cursor / PFU_ROWS) * PFU_ROWS; i < (menu->cursor / PFU_ROWS) * PFU_ROWS + PFU_ROWS && i < menu->entry_count; i++)
   {
+    char print_string[128];
     int j = i % PFU_ROWS;
+    int k;
+
+    /* Prevent characters in files from being read as text control codes */
+    snprintf(print_string, sizeof(print_string), "%s", menu->entries[i].title);
+    for (k = 0; print_string[k] != '\0'; k++)
+    {
+      if (print_string[k] == '$' || print_string[k] == '^')
+        print_string[k] = '-';
+    }
 
     if (i == menu->cursor)
-      rdpq_text_printf(NULL, 2, 48 + 8 + PFU_DROP, 32 + 64 + 24 + j * 24 + PFU_DROP, menu->entries[i].title);
-    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + j * 24, menu->entries[i].title);
+      rdpq_text_printf(NULL, 2, 48 + 8 + PFU_DROP, 32 + 64 + 24 + j * 24 + PFU_DROP, print_string);
+    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + j * 24, print_string);
     if (menu->entries[i].type == PFU_ENTRY_TYPE_BOOL)
       rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, menu->entries[i].current_value ? "Enabled" : "Disabled");
     else if (menu->entries[i].type == PFU_ENTRY_TYPE_CHOICE)
