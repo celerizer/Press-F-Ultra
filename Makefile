@@ -4,7 +4,7 @@ all: Press-F.z64
 CFLAGS += \
 	-DPF_BIG_ENDIAN=1 \
 	-DPF_HAVE_HLE_BIOS=0 \
-	-DPF_SOUND_FREQUENCY=22050 \
+	-DPF_SOUND_FREQUENCY=44100 \
 	-DPF_ROMC=0 \
 	-O2 -funroll-loops \
 	-std=c89 -Wall -Wextra

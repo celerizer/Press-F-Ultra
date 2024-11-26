@@ -77,7 +77,7 @@ int main(void)
   debug_init_sdfs("sd:/", -1);
 
   /* Initialize audio */
-  audio_init(PF_SOUND_FREQUENCY, 2);
+  audio_init(PF_SOUND_FREQUENCY, 4);
 
   /* Initialize emulator */
   pressf_init(&emu.system);

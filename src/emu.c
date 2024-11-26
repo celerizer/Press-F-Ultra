@@ -89,7 +89,7 @@ void pfu_emu_run(void)
   draw_frame_rgb5551(((vram_t*)emu.system.f8devices[3].device)->data, emu.video_buffer);
 
   /* Audio */
-  audio_push(((f8_beeper_t*)emu.system.f8devices[7].device)->samples, PF_SOUND_SAMPLES, false);
+  audio_push(((f8_beeper_t*)emu.system.f8devices[7].device)->samples, PF_SOUND_SAMPLES, true);
 
   /* Blit the frame */
   if (emu.video_scaling == PFU_SCALING_1_1)
