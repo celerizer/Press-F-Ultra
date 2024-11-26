@@ -52,6 +52,15 @@ static int pfu_load_rom(unsigned address, const char *path, unsigned source)
   return success;
 }
 
+static void pfu_menu_entry_back(void)
+{
+  unsigned dummy = 0;
+
+  f8_write(&emu.system, 0x0800, &dummy, sizeof(dummy));
+  pfu_state_set(PFU_STATE_EMU);
+  pressf_reset(&emu.system);
+}
+
 static void pfu_menu_entry_bool(pfu_menu_entry_t *entry, bool value)
 {
   if (!entry)
@@ -267,6 +276,9 @@ static void pfu_menu_input(void)
   {
     switch (entry->type)
     {
+    case PFU_ENTRY_TYPE_BACK:
+      pfu_menu_entry_back();
+      break;
     case PFU_ENTRY_TYPE_BOOL:
       pfu_menu_entry_bool(entry, !entry->current_value);
       break;
