@@ -6,7 +6,6 @@ CFLAGS += \
 	-DPF_HAVE_HLE_BIOS=0 \
 	-DPF_SOUND_FREQUENCY=22050 \
 	-DPF_ROMC=0 \
-	-DPRESS_F_ULTRA_PREVIEW=1 \
 	-O2 -funroll-loops \
 	-std=c89 -Wall -Wextra
 

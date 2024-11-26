@@ -12,15 +12,6 @@
 #include "emu.h"
 #include "menu.h"
 
-static const unsigned char bios_a[] = {};
-static const unsigned int bios_a_size = 0;
-
-static const unsigned char bios_b[] = {};
-static const unsigned int bios_b_size = 0;
-
-static const unsigned char rom[] = {};
-static const unsigned int rom_size = 0;
-
 pfu_emu_ctx_t emu;
 
 void pfu_error_no_rom(void)
@@ -56,11 +47,7 @@ void pfu_state_set(pfu_state_type state)
 int main(void)
 {
   /* Initialize controller */
-#if PRESS_F_ULTRA_PREVIEW
   joypad_init();
-#else
-  controller_init();
-#endif
 
   memset(&emu, 0, sizeof(emu));
   
@@ -95,12 +82,6 @@ int main(void)
   /* Initialize emulator */
   pressf_init(&emu.system);
   f8_system_init(&emu.system, &pf_systems[0]);
-  if (bios_a_size)
-    f8_write(&emu.system, 0x0000, bios_a, bios_a_size);
-  if (bios_b_size)
-    f8_write(&emu.system, 0x0400, bios_b, bios_b_size);
-  if (rom_size)
-    f8_write(&emu.system, 0x0800, rom, rom_size);
   pfu_menu_init_roms();
 
   while (64)
