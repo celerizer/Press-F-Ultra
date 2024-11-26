@@ -1,7 +1,7 @@
 #ifndef PRESS_F_ULTRA_MENU_H
 #define PRESS_F_ULTRA_MENU_H
 
-#define PFU_MENU_MAX_ENTRIES 64
+#define PFU_MENU_MAX_ENTRIES 256
 #define PFU_MENU_MAX_CHOICES 8
 
 typedef enum
@@ -33,6 +33,7 @@ typedef struct
   char choices[PFU_MENU_MAX_CHOICES][32];
   pfu_entry_key key;
   pfu_entry_type type;
+  signed current_value;
 } pfu_menu_entry_t;
 
 typedef struct
@@ -42,8 +43,13 @@ typedef struct
   char menu_subtitle[256];
   int entry_count;
   int cursor;
+  int offset;
 } pfu_menu_ctx_t;
 
 void pfu_menu_run(void);
+
+bool pfu_menu_init_settings(void);
+
+bool pfu_menu_init_roms(void);
 
 #endif

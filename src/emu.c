@@ -148,9 +148,9 @@ static void pfu_emu_input(void)
 
   /* Handle hotkeys */
   if (buttons.p1_l)
-    emu.video_scaling = PFU_SCALING_1_1;
+    pfu_menu_init_roms();
   else if (buttons.p1_r)
-    emu.video_scaling = PFU_SCALING_4_3;
+    pfu_menu_init_settings();
 }
 
 void pfu_emu_run(void)

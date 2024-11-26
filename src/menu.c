@@ -98,6 +98,7 @@ static void pfu_menu_file(const char *path)
   {
     pfu_load_rom(0x0800, path);
     pfu_state_set(PFU_STATE_EMU);
+    pressf_reset(&emu.system);
   }
 }
 
@@ -133,6 +134,9 @@ bool pfu_menu_init_settings(void)
   snprintf(entry->choices[2], sizeof(entry->choices[2]), "%s", "Skinny");
 
   menu.entry_count = 3;
+
+  emu.menu = menu;
+  emu.state = PFU_STATE_MENU;
 
   return true;
 }
@@ -177,6 +181,7 @@ bool pfu_menu_init_roms(void)
       }
       err = dir_findnext("sd:/press-f", &dir); 
     }
+    debug_close_sdfs();
 
     /* Fail if BIOS are not located */
     if (emu.bios_a_loaded && emu.bios_b_loaded)
@@ -185,6 +190,8 @@ bool pfu_menu_init_roms(void)
       menu.cursor = 0;
       snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
       snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
+      emu.menu = menu;
+      emu.state = PFU_STATE_MENU;
 
       return true;
     }
@@ -194,9 +201,82 @@ bool pfu_menu_init_roms(void)
   return false;
 }
 
+static uint8_t sine_color;
+
+static void pfu_menu_input(void)
+{
+  joypad_buttons_t buttons;
+
+  joypad_poll();
+  buttons = joypad_get_buttons_pressed(JOYPAD_PORT_1);
+  if (buttons.d_up && emu.menu.cursor > 0)
+    emu.menu.cursor--;
+  else if (buttons.d_down && emu.menu.cursor < emu.menu.entry_count - 1)
+    emu.menu.cursor++;
+  else if (buttons.d_left && emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_CHOICE)
+  {
+    emu.menu.entries[emu.menu.cursor].current_value--;
+    if (emu.menu.entries[emu.menu.cursor].current_value < 0)
+      emu.menu.entries[emu.menu.cursor].current_value = PFU_MENU_MAX_CHOICES - 1;
+    pfu_menu_option_choice(emu.menu.entries[emu.menu.cursor].key, emu.menu.entries[emu.menu.cursor].current_value);
+  }
+  else if (buttons.d_right && emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_CHOICE)
+  {
+    emu.menu.entries[emu.menu.cursor].current_value++;
+    if (emu.menu.entries[emu.menu.cursor].current_value >= PFU_MENU_MAX_CHOICES)
+      emu.menu.entries[emu.menu.cursor].current_value = 0;
+    pfu_menu_option_choice(emu.menu.entries[emu.menu.cursor].key, emu.menu.entries[emu.menu.cursor].current_value);
+  }
+  else if (buttons.a)
+  {
+    switch (emu.menu.entries[emu.menu.cursor].type)
+    {
+    case PFU_ENTRY_TYPE_BOOL:
+      pfu_menu_option_bool(emu.menu.entries[emu.menu.cursor].key, true);
+      break;
+    case PFU_ENTRY_TYPE_CHOICE:
+      emu.menu.entries[emu.menu.cursor].current_value++;
+      if (emu.menu.entries[emu.menu.cursor].current_value >= PFU_MENU_MAX_CHOICES)
+        emu.menu.entries[emu.menu.cursor].current_value = 0;
+      pfu_menu_option_choice(emu.menu.entries[emu.menu.cursor].key, emu.menu.entries[emu.menu.cursor].current_value);
+      break;
+    case PFU_ENTRY_TYPE_FILE:
+      pfu_menu_file(emu.menu.entries[emu.menu.cursor].title);
+      break;
+    default:
+      break;
+    }
+  }
+  else if (buttons.b)
+    pfu_state_set(PFU_STATE_EMU);
+}
+
 void pfu_menu_run(void)
 {
-#if 0 /** @todo PRESS_F_ULTRA_PREVIEW */
+#if PRESS_F_ULTRA_PREVIEW
+  surface_t *disp = display_get();
+  int i;
+
+  rdpq_attach_clear(disp, NULL);
+  rdpq_set_mode_fill(RGBA32(0x22, 0x22, 0x22, 1));
+  rdpq_fill_rectangle(0, 0, display_get_width(), display_get_height());
+
+  rdpq_set_mode_fill(RGBA32(sine_color, sine_color, 0x00, 1));
+  rdpq_fill_rectangle(48 + 4, 32 + 64 + (emu.menu.cursor % 8) * 24 + 3, display_get_width() - (48 + 4), 32 + 64 + (emu.menu.cursor % 8) * 24 + 24 + 3);
+
+  rdpq_set_mode_copy(true);
+  rdpq_text_printf(NULL, 1, 48, 32 + 24, emu.menu.menu_title);
+  rdpq_text_printf(NULL, 1, 48, 32 + 24 * 2, emu.menu.menu_subtitle);
+  for (i = (emu.menu.cursor / 8) * 8; i < (emu.menu.cursor / 8) * 8 + 8; i++)
+  {
+    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + i * 24, emu.menu.entries[i].title);
+    if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_CHOICE)
+      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + i * 24, emu.menu.entries[i].choices[emu.menu.entries[i].current_value]);
+  }
+  rdpq_detach_show();
+
+  sine_color = (int)(sin(emu.frames * 0.1) * 127.0) + 128;
+  pfu_menu_input();
 #else
   /** 
    * This is the codepath for the old console-based menu. Only the ROM

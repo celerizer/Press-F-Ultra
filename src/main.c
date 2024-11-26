@@ -61,6 +61,8 @@ int main(void)
 #else
   controller_init();
 #endif
+
+  memset(&emu, 0, sizeof(emu));
   
   /* Initialize video */
   display_init(RESOLUTION_640x480, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
@@ -68,6 +70,11 @@ int main(void)
   emu.video_buffer = (uint16_t*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
   emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, SCREEN_WIDTH, SCREEN_HEIGHT);
   emu.video_scaling = PFU_SCALING_4_3;
+
+  /* Initialize assets */
+  dfs_init(DFS_DEFAULT_LOCATION);
+  rdpq_font_t *font = rdpq_font_load("rom:/Tuffy_Bold.font64");
+  rdpq_text_register_font(1, font);
 
   /* Initialize audio */
   audio_init(PF_SOUND_FREQUENCY, 2);
@@ -81,7 +88,7 @@ int main(void)
     f8_write(&emu.system, 0x0400, bios_b, bios_b_size);
   if (rom_size)
     f8_write(&emu.system, 0x0800, rom, rom_size);
-  emu.state = PFU_STATE_MENU;
+  pfu_menu_init_roms();
 
   while (64)
   {
@@ -96,5 +103,6 @@ int main(void)
     default:
       exit(0);
     }
+    emu.frames++;
   }
 }

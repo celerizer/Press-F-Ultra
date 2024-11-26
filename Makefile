@@ -13,33 +13,26 @@ CFLAGS += \
 BUILD_DIR = build
 SRC_DIR = src
 include $(N64_INST)/include/n64.mk
+include src/libpressf/libpressf.mk
 
-OBJS = \
-	$(BUILD_DIR)/src/emu.o \
-	$(BUILD_DIR)/src/main.o \
-	$(BUILD_DIR)/src/menu.o \
-	$(BUILD_DIR)/src/libpressf/src/debug.o \
-	$(BUILD_DIR)/src/libpressf/src/dma.o \
-	$(BUILD_DIR)/src/libpressf/src/emu.o \
-	$(BUILD_DIR)/src/libpressf/src/font.o \
-	$(BUILD_DIR)/src/libpressf/src/hle.o \
-	$(BUILD_DIR)/src/libpressf/src/input.o \
-	$(BUILD_DIR)/src/libpressf/src/romc.o \
-	$(BUILD_DIR)/src/libpressf/src/screen.o \
-	$(BUILD_DIR)/src/libpressf/src/software.o \
-	$(BUILD_DIR)/src/libpressf/src/wave.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/2102.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/2114.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/3850.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/3851.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/beeper.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/f8_device.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/fairbug_parallel.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/hand_controller.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/schach_led.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/selector_control.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/system.o \
-	$(BUILD_DIR)/src/libpressf/src/hw/vram.o
+assets_fnt = $(wildcard assets/*.fnt)
+assets_ttf = $(wildcard assets/*.ttf)
+assets_png = $(wildcard assets/*.png)
+
+assets_conv = \
+	$(addprefix filesystem/,$(notdir $(assets_ttf:%.ttf=%.font64))) \
+	$(addprefix filesystem/,$(notdir $(assets_fnt:%.fnt=%.font64))) \
+    $(addprefix filesystem/,$(notdir $(assets_png:%.png=%.sprite)))
+
+MKSPRITE_FLAGS ?=
+MKFONT_FLAGS ?= --range all
+
+src = \
+	$(SRC_DIR)/emu.c \
+	$(SRC_DIR)/main.c \
+	$(SRC_DIR)/menu.c
+
+src += $(PRESS_F_SOURCES)
 
 # Get the current git version
 GIT_VERSION := $(shell git describe --tags --dirty --always)
@@ -47,12 +40,34 @@ GIT_VERSION := $(shell git describe --tags --dirty --always)
 # Define the N64 ROM title with the git version
 N64_ROM_TITLE_WITH_VERSION := "Press F $(GIT_VERSION)"
 
-Press-F.z64: N64_ROM_TITLE = $(N64_ROM_TITLE_WITH_VERSION)
+all: Press-F.z64
 
-$(BUILD_DIR)/Press-F.elf: $(OBJS)
+filesystem/%.font64: assets/%.ttf
+	@mkdir -p $(dir $@)
+	@echo "    [FONT] $@"
+	$(N64_MKFONT) $(MKFONT_FLAGS) -o filesystem "$<"
+
+filesystem/%.font64: assets/%.fnt
+	@mkdir -p $(dir $@)
+	@echo "    [FONT] $@"
+	$(N64_MKFONT) $(MKFONT_FLAGS) -o filesystem "$<"
+
+filesystem/%.sprite: assets/%.png
+	@mkdir -p $(dir $@)
+	@echo "    [SPRITE] $@"
+	$(N64_MKSPRITE) $(MKSPRITE_FLAGS) -o filesystem "$<"
+
+filesystem/Tuffy_Bold.font64: MKFONT_FLAGS += --size 18 --outline 1
+
+$(BUILD_DIR)/Press-F.dfs: $(assets_conv) 
+$(BUILD_DIR)/Press-F.elf: $(src:%.c=$(BUILD_DIR)/%.o)
+
+Press-F.z64: N64_ROM_TITLE = $(N64_ROM_TITLE_WITH_VERSION)
+Press-F.z64: $(BUILD_DIR)/Press-F.dfs
 
 clean:
-	rm -rf $(BUILD_DIR) *.z64
-.PHONY: clean
+	rm -rf $(BUILD_DIR) filesystem *.z64
 
 -include $(wildcard $(BUILD_DIR)/*.d)
+
+.PHONY: clean
