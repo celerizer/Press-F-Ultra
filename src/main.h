@@ -32,7 +32,9 @@ typedef struct
   f8_system_t system;
   bool bios_a_loaded;
   bool bios_b_loaded;
-  pfu_menu_ctx_t menu;
+  pfu_menu_ctx_t menu_roms;
+  pfu_menu_ctx_t menu_settings;
+  pfu_menu_ctx_t *current_menu;
   unsigned frames;
   sprite_t *icon;
 } pfu_emu_ctx_t;

@@ -82,7 +82,8 @@ int main(void)
   /* Initialize emulator */
   pressf_init(&emu.system);
   f8_system_init(&emu.system, &pf_systems[0]);
-  pfu_menu_init_roms();
+  pfu_menu_init();
+  pfu_menu_switch_roms();
 
   while (64)
   {

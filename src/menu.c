@@ -16,7 +16,7 @@ enum
   PFU_SOURCE_SIZE
 };
 
-int pfu_load_rom(unsigned address, const char *path, unsigned source)
+static int pfu_load_rom(unsigned address, const char *path, unsigned source)
 {
   FILE *file;
   char buffer[0x0400];
@@ -26,7 +26,9 @@ int pfu_load_rom(unsigned address, const char *path, unsigned source)
   if (source == PFU_SOURCE_INVALID || source >= PFU_SOURCE_SIZE)
     return 0;
 
-  snprintf(fullpath, sizeof(fullpath), "%s/%s", (source == PFU_SOURCE_SD_CARD) ? "sd:/press-f" : "rom:/roms", path);
+  snprintf(fullpath, sizeof(fullpath), "%s/%s", 
+           source == PFU_SOURCE_SD_CARD ? "sd:/press-f" : "rom:/roms",
+           path);
   file = fopen(fullpath, "r");
   if (file)
   {
@@ -50,7 +52,7 @@ int pfu_load_rom(unsigned address, const char *path, unsigned source)
   return success;
 }
 
-static void pfu_menu_option_bool(pfu_menu_entry_t *entry, bool value)
+static void pfu_menu_entry_bool(pfu_menu_entry_t *entry, bool value)
 {
   if (!entry)
     return;
@@ -65,7 +67,7 @@ static void pfu_menu_option_bool(pfu_menu_entry_t *entry, bool value)
   entry->current_value = value;
 }
 
-static void pfu_menu_option_choice(pfu_menu_entry_t *entry, signed value)
+static void pfu_menu_entry_choice(pfu_menu_entry_t *entry, signed value)
 {
   if (!entry)
     return;
@@ -109,7 +111,7 @@ static void pfu_menu_option_choice(pfu_menu_entry_t *entry, signed value)
   entry->current_value = value;
 }
 
-static void pfu_menu_file(pfu_menu_entry_t *entry)
+static void pfu_menu_entry_file(pfu_menu_entry_t *entry)
 {
   if (entry)
   {
@@ -119,12 +121,15 @@ static void pfu_menu_file(pfu_menu_entry_t *entry)
   }
 }
 
-bool pfu_menu_init_settings(void)
+static void pfu_menu_init_settings(void)
 {
   pfu_menu_ctx_t menu;
   pfu_menu_entry_t *entry;
+  const unsigned entry_count = 3;
 
   memset(&menu, 0, sizeof(menu));
+  menu.entries = calloc(entry_count, sizeof(pfu_menu_entry_t));
+  menu.entry_count = entry_count;
 
   snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - Settings");
   snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a setting to change.");
@@ -150,12 +155,7 @@ bool pfu_menu_init_settings(void)
   snprintf(entry->choices[1], sizeof(entry->choices[1]), "%s", "Cute");
   snprintf(entry->choices[2], sizeof(entry->choices[2]), "%s", "Skinny");
 
-  menu.entry_count = 3;
-
-  emu.menu = menu;
-  emu.state = PFU_STATE_MENU;
-
-  return true;
+  emu.menu_settings = menu;
 }
 
 static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path, int src)
@@ -191,13 +191,14 @@ static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path
   }
 }
 
-bool pfu_menu_init_roms(void)
+static void pfu_menu_init_roms(void)
 {
-  bool success = false;
   pfu_menu_ctx_t menu;
 
+  menu.entries = calloc(256, sizeof(pfu_menu_entry_t));
+
   /* Set up dummy file entry to not load a ROM */
-  snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS");
+  snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS...");
   menu.entries[0].type = PFU_ENTRY_TYPE_BACK;
   menu.entries[0].key = PFU_ENTRY_KEY_NONE;
   menu.entry_count = 1;
@@ -210,14 +211,8 @@ bool pfu_menu_init_roms(void)
   {
     snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
     snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
-    menu.cursor = 0;
-    emu.menu = menu;
-    emu.state = PFU_STATE_MENU;
-
-    success = true;
+    emu.menu_roms = menu;
   }
-
-  return success;
 }
 
 static uint8_t sine_color;
@@ -228,25 +223,31 @@ static uint8_t sine_color;
 static void pfu_menu_input(void)
 {
   joypad_buttons_t buttons;
-  pfu_menu_entry_t *entry = &emu.menu.entries[emu.menu.cursor];
+  pfu_menu_ctx_t *menu = emu.current_menu;
+  pfu_menu_entry_t *entry;
+  
+  if (!menu)
+    return;
+
+  entry = &emu.current_menu->entries[emu.current_menu->cursor];
 
   joypad_poll();
   buttons = joypad_get_buttons_pressed(JOYPAD_PORT_1);
   if (buttons.d_up)
-    emu.menu.cursor--;
+    menu->cursor--;
   else if (buttons.d_down)
-    emu.menu.cursor++;
+    menu->cursor++;
   else if (buttons.d_left)
     switch (entry->type)
     {
     case PFU_ENTRY_TYPE_BOOL:
-      pfu_menu_option_bool(entry, false);
+      pfu_menu_entry_bool(entry, false);
       break;
     case PFU_ENTRY_TYPE_CHOICE:
-      pfu_menu_option_choice(entry, entry->current_value - 1);
+      pfu_menu_entry_choice(entry, entry->current_value - 1);
       break;
     case PFU_ENTRY_TYPE_FILE:
-      emu.menu.cursor -= PFU_ROWS;
+      menu->cursor -= PFU_ROWS;
     default:
       return;
     }
@@ -254,26 +255,26 @@ static void pfu_menu_input(void)
     switch (entry->type)
     {
     case PFU_ENTRY_TYPE_BOOL:
-      pfu_menu_option_bool(entry, true);
+      pfu_menu_entry_bool(entry, true);
       break;
     case PFU_ENTRY_TYPE_CHOICE:
-      pfu_menu_option_choice(entry, entry->current_value + 1);
+      pfu_menu_entry_choice(entry, entry->current_value + 1);
       break;
     default:
-      emu.menu.cursor += PFU_ROWS;
+      menu->cursor += PFU_ROWS;
     }
   else if (buttons.a)
   {
     switch (entry->type)
     {
     case PFU_ENTRY_TYPE_BOOL:
-      pfu_menu_option_bool(entry, !entry->current_value);
+      pfu_menu_entry_bool(entry, !entry->current_value);
       break;
     case PFU_ENTRY_TYPE_CHOICE:
-      pfu_menu_option_choice(entry, entry->current_value + 1);
+      pfu_menu_entry_choice(entry, entry->current_value + 1);
       break;
     case PFU_ENTRY_TYPE_FILE:
-      pfu_menu_file(entry);
+      pfu_menu_entry_file(entry);
       break;
     default:
       return;
@@ -282,44 +283,66 @@ static void pfu_menu_input(void)
   else if (buttons.b)
     pfu_state_set(PFU_STATE_EMU);
   
-  if (emu.menu.cursor < 0)
-    emu.menu.cursor = 0;
-  else if (emu.menu.cursor >= emu.menu.entry_count)
-    emu.menu.cursor = emu.menu.entry_count - 1;
+  if (menu->cursor < 0)
+    menu->cursor = 0;
+  else if (menu->cursor >= menu->entry_count)
+    menu->cursor = menu->entry_count - 1;
+}
+
+void pfu_menu_init(void)
+{
+  pfu_menu_init_roms();
+  pfu_menu_init_settings();
 }
 
 void pfu_menu_run(void)
 {
   surface_t *disp = display_get();
+  const pfu_menu_ctx_t *menu = emu.current_menu;
   int i;
+
+  if (!menu)
+    return;
 
   rdpq_attach_clear(disp, NULL);
   rdpq_set_mode_fill(RGBA32(0x22, 0x22, 0x22, 1));
   rdpq_fill_rectangle(0, 0, display_get_width(), display_get_height());
 
   rdpq_set_mode_fill(RGBA32(sine_color, sine_color, 0x00, 1));
-  rdpq_fill_rectangle(48 + 4, 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 6, display_get_width() - (48 + 4), 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 24 + 6);
+  rdpq_fill_rectangle(48 + 4, 32 + 64 + (menu->cursor % PFU_ROWS) * 24 + 6, display_get_width() - (48 + 4), 32 + 64 + (menu->cursor % PFU_ROWS) * 24 + 24 + 6);
 
   rdpq_set_mode_copy(true);
 
   rdpq_sprite_blit(emu.icon, 48, 32, NULL);
 
-  rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24, emu.menu.menu_title);
-  rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24 * 2, emu.menu.menu_subtitle);
-  for (i = (emu.menu.cursor / PFU_ROWS) * PFU_ROWS; i < (emu.menu.cursor / PFU_ROWS) * PFU_ROWS + PFU_ROWS && i < emu.menu.entry_count; i++)
+  rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24, menu->menu_title);
+  rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24 * 2, menu->menu_subtitle);
+  for (i = (menu->cursor / PFU_ROWS) * PFU_ROWS; i < (menu->cursor / PFU_ROWS) * PFU_ROWS + PFU_ROWS && i < menu->entry_count; i++)
   {
     int j = i % PFU_ROWS;
 
-    if (i == emu.menu.cursor)
-      rdpq_text_printf(NULL, 2, 48 + 8 + PFU_DROP, 32 + 64 + 24 + j * 24 + PFU_DROP, emu.menu.entries[i].title);
-    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + j * 24, emu.menu.entries[i].title);
-    if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_BOOL)
-      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, emu.menu.entries[i].current_value ? "Enabled" : "Disabled");
-    else if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_CHOICE)
-      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, emu.menu.entries[i].choices[emu.menu.entries[i].current_value]);
+    if (i == menu->cursor)
+      rdpq_text_printf(NULL, 2, 48 + 8 + PFU_DROP, 32 + 64 + 24 + j * 24 + PFU_DROP, menu->entries[i].title);
+    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + j * 24, menu->entries[i].title);
+    if (menu->entries[i].type == PFU_ENTRY_TYPE_BOOL)
+      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, menu->entries[i].current_value ? "Enabled" : "Disabled");
+    else if (menu->entries[i].type == PFU_ENTRY_TYPE_CHOICE)
+      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, menu->entries[i].choices[menu->entries[i].current_value]);
   }
   rdpq_detach_show();
 
   sine_color = (int)(sin(emu.frames * 0.1) * 127.0) + 128;
   pfu_menu_input();
+}
+
+void pfu_menu_switch_roms(void)
+{
+  emu.state = PFU_STATE_MENU;
+  emu.current_menu = &emu.menu_roms;
+}
+
+void pfu_menu_switch_settings(void)
+{
+  emu.state = PFU_STATE_MENU;
+  emu.current_menu = &emu.menu_settings;
 }

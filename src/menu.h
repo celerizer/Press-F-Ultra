@@ -29,7 +29,7 @@ typedef enum
 
 typedef struct
 {
-  char title[256];
+  char title[128];
   char choices[PFU_MENU_MAX_CHOICES][32];
   pfu_entry_key key;
   pfu_entry_type type;
@@ -38,7 +38,7 @@ typedef struct
 
 typedef struct
 {
-  pfu_menu_entry_t entries[PFU_MENU_MAX_ENTRIES];
+  pfu_menu_entry_t *entries;
   char menu_title[256];
   char menu_subtitle[256];
   int entry_count;
@@ -48,8 +48,10 @@ typedef struct
 
 void pfu_menu_run(void);
 
-bool pfu_menu_init_settings(void);
+void pfu_menu_init(void);
 
-bool pfu_menu_init_roms(void);
+void pfu_menu_switch_roms(void);
+
+void pfu_menu_switch_settings(void);
 
 #endif
