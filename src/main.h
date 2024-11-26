@@ -34,6 +34,7 @@ typedef struct
   bool bios_b_loaded;
   pfu_menu_ctx_t menu;
   unsigned frames;
+  sprite_t *icon;
 } pfu_emu_ctx_t;
 
 extern pfu_emu_ctx_t emu;
