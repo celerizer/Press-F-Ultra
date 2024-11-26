@@ -213,9 +213,9 @@ static void pfu_menu_input(void)
 
   joypad_poll();
   buttons = joypad_get_buttons_pressed(JOYPAD_PORT_1);
-  if (buttons.d_up && emu.menu.cursor > 0)
+  if (buttons.d_up)
     emu.menu.cursor--;
-  else if (buttons.d_down && emu.menu.cursor < emu.menu.entry_count - 1)
+  else if (buttons.d_down)
     emu.menu.cursor++;
   else if (buttons.d_left)
     switch (entry->type)
@@ -264,6 +264,11 @@ static void pfu_menu_input(void)
   }
   else if (buttons.b)
     pfu_state_set(PFU_STATE_EMU);
+  
+  if (emu.menu.cursor < 0)
+    emu.menu.cursor = 0;
+  else if (emu.menu.cursor >= emu.menu.entry_count)
+    emu.menu.cursor = emu.menu.entry_count - 1;
 }
 
 void pfu_menu_run(void)
