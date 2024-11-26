@@ -63,8 +63,8 @@ static void pfu_emu_input(void)
   joypad_buttons_t keys_1, keys_2;
 
   joypad_poll();
-  keys_1 = joypad_get_buttons_pressed(JOYPAD_PORT_1);
-  keys_2 = joypad_get_buttons_pressed(JOYPAD_PORT_2);
+  keys_1 = joypad_get_buttons(JOYPAD_PORT_1);
+  keys_2 = joypad_get_buttons(JOYPAD_PORT_2);
 
   buttons.p1_up = keys_1.d_up;
   buttons.p1_down = keys_1.d_down;
