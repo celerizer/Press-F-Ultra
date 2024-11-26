@@ -11,6 +11,7 @@ int pfu_load_rom(unsigned address, const char *path)
   FILE *file;
   char buffer[0x0400];
   char fullpath[256];
+  int success = 0;
 
   snprintf(fullpath, sizeof(fullpath), "sd:/press-f/%s", path);
   file = fopen(fullpath, "r");
@@ -19,58 +20,58 @@ int pfu_load_rom(unsigned address, const char *path)
     int file_size;
     int i;
 
-    printf("Loading %s...\n", fullpath);
-
     fseek(file, 0, SEEK_END);
     file_size = ftell(file);
     rewind(file);
 
-    printf("Size: %04X\n", file_size);
-
     for (i = 0; i < file_size; i += 0x0400)
     {
-      int bytes_read;
+      int bytes_read = fread(buffer, sizeof(char), 0x0400, file);
 
-      bytes_read = fread(buffer, sizeof(char), 0x0400, file);
       f8_write(&emu.system, address + i, buffer, bytes_read);
-      printf("Loaded %04X bytes to %04X\n", bytes_read, address + i);
     }
     fclose(file);
-
-    return 1;
+    success = 1;
   }
 
-  return 0;
+  return success;
 }
 
-static void pfu_menu_option_bool(pfu_entry_key key, bool value)
+static void pfu_menu_option_bool(pfu_menu_entry_t *entry, bool value)
 {
-  switch (key)
+  if (!entry)
+    return;
+  else switch (entry->key)
   {
   case PFU_ENTRY_KEY_PIXEL_PERFECT:
     emu.video_scaling = value ? PFU_SCALING_1_1 : PFU_SCALING_4_3;
     break;
   default:
-    break;
+    return;
   }
+  entry->current_value = value;
 }
 
-static void pfu_menu_option_choice(pfu_entry_key key, unsigned value)
+static void pfu_menu_option_choice(pfu_menu_entry_t *entry, signed value)
 {
-  switch (key)
+  if (!entry)
+    return;
+  else switch (entry->key)
   {
   case PFU_ENTRY_KEY_SYSTEM_MODEL:
     switch (value)
     {
     case 0:
-      emu.system.cycles = F8_CLOCK_CHANNEL_F_NTSC;
+      emu.system.settings.f3850_clock_speed = F8_CLOCK_CHANNEL_F_NTSC;
       break;
     case 1:
-      emu.system.cycles = F8_CLOCK_CHANNEL_F_PAL_GEN_1;
+      emu.system.settings.f3850_clock_speed = F8_CLOCK_CHANNEL_F_PAL_GEN_1;
       break;
     case 2:
-      emu.system.cycles = F8_CLOCK_CHANNEL_F_PAL_GEN_2;
+      emu.system.settings.f3850_clock_speed = F8_CLOCK_CHANNEL_F_PAL_GEN_2;
       break;
+    default:
+      return;
     }
     break;
   case PFU_ENTRY_KEY_FONT:
@@ -85,11 +86,14 @@ static void pfu_menu_option_choice(pfu_entry_key key, unsigned value)
     case 2:
       font_load(&emu.system, FONT_SKINNY);
       break;
+    default:
+      return;
     }
     break;
   default:  
-    break;
+    return;
   }
+  entry->current_value = value;
 }
 
 static void pfu_menu_file(const char *path)
@@ -143,62 +147,58 @@ bool pfu_menu_init_settings(void)
 
 bool pfu_menu_init_roms(void)
 {
-  if (debug_init_sdfs("sd:/", -1))
+  bool success = false;
+  dir_t dir;
+  pfu_menu_ctx_t menu;
+  int err = dir_findfirst("sd:/press-f", &dir);
+  int count = 1;
+
+  /* Set up dummy file entry to not load a ROM */
+  snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS");
+  menu.entries[0].type = PFU_ENTRY_TYPE_BACK;
+  menu.entries[0].key = PFU_ENTRY_KEY_NONE;
+
+  while (!err)
   {
-    dir_t dir;
-    pfu_menu_ctx_t menu;
-    int err = dir_findfirst("sd:/press-f", &dir);
-    int count = 1;
-
-    /* Set up dummy file entry to not load a ROM */
-    snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS");
-    menu.entries[0].type = PFU_ENTRY_TYPE_BACK;
-    menu.entries[0].key = PFU_ENTRY_KEY_NONE;
-
-    while (!err)
+    if (dir.d_type == DT_REG)
     {
-      if (dir.d_type == DT_REG)
+      /* Load BIOS if found on SD Card */
+      if (!strncmp(dir.d_name, "sl31253.bin", 8))
       {
-        /* Load BIOS if found on SD Card */
-        if (!strncmp(dir.d_name, "sl31253.bin", 8))
-        {
-          if (!emu.bios_a_loaded)
-            emu.bios_a_loaded = pfu_load_rom(0x0000, dir.d_name);
-        }
-        else if (!strncmp(dir.d_name, "sl31254.bin", 8))
-        {
-          if (!emu.bios_b_loaded)
-            emu.bios_b_loaded = pfu_load_rom(0x0400, dir.d_name);
-        }
-        else if (strlen(dir.d_name) && dir.d_name[0] != '.')
-        {
-          /* List all other files */
-          snprintf(menu.entries[count].title, sizeof(dir.d_name), "%s", dir.d_name);
-          menu.entries[count].type = PFU_ENTRY_TYPE_FILE;
-          menu.entries[count].key = PFU_ENTRY_KEY_NONE;
-          count++;
-        }
+        if (!emu.bios_a_loaded)
+          emu.bios_a_loaded = pfu_load_rom(0x0000, dir.d_name);
       }
-      err = dir_findnext("sd:/press-f", &dir); 
+      else if (!strncmp(dir.d_name, "sl31254.bin", 8))
+      {
+        if (!emu.bios_b_loaded)
+          emu.bios_b_loaded = pfu_load_rom(0x0400, dir.d_name);
+      }
+      else if (strlen(dir.d_name) && dir.d_name[0] != '.')
+      {
+        /* List all other files */
+        snprintf(menu.entries[count].title, sizeof(dir.d_name), "%s", dir.d_name);
+        menu.entries[count].type = PFU_ENTRY_TYPE_FILE;
+        menu.entries[count].key = PFU_ENTRY_KEY_NONE;
+        count++;
+      }
     }
-    debug_close_sdfs();
-
-    /* Fail if BIOS are not located */
-    if (emu.bios_a_loaded && emu.bios_b_loaded)
-    {
-      menu.entry_count = count;
-      menu.cursor = 0;
-      snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
-      snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
-      emu.menu = menu;
-      emu.state = PFU_STATE_MENU;
-
-      return true;
-    }
+    err = dir_findnext("sd:/press-f", &dir); 
   }
-  debug_close_sdfs();
 
-  return false;
+  /* Fail if BIOS are not located */
+  if (emu.bios_a_loaded && emu.bios_b_loaded)
+  {
+    menu.entry_count = count;
+    menu.cursor = 0;
+    snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
+    snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
+    emu.menu = menu;
+    emu.state = PFU_STATE_MENU;
+
+    success = true;
+  }
+
+  return success;
 }
 
 static uint8_t sine_color;
@@ -206,6 +206,7 @@ static uint8_t sine_color;
 static void pfu_menu_input(void)
 {
   joypad_buttons_t buttons;
+  pfu_menu_entry_t *entry = &emu.menu.entries[emu.menu.cursor];
 
   joypad_poll();
   buttons = joypad_get_buttons_pressed(JOYPAD_PORT_1);
@@ -213,43 +214,32 @@ static void pfu_menu_input(void)
     emu.menu.cursor--;
   else if (buttons.d_down && emu.menu.cursor < emu.menu.entry_count - 1)
     emu.menu.cursor++;
-  else if (buttons.d_left && emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_CHOICE)
-  {
-    emu.menu.entries[emu.menu.cursor].current_value--;
-    if (emu.menu.entries[emu.menu.cursor].current_value < 0)
-      emu.menu.entries[emu.menu.cursor].current_value = PFU_MENU_MAX_CHOICES - 1;
-    pfu_menu_option_choice(emu.menu.entries[emu.menu.cursor].key, emu.menu.entries[emu.menu.cursor].current_value);
-  }
-  else if (buttons.d_right && emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_CHOICE)
-  {
-    emu.menu.entries[emu.menu.cursor].current_value++;
-    if (emu.menu.entries[emu.menu.cursor].current_value >= PFU_MENU_MAX_CHOICES)
-      emu.menu.entries[emu.menu.cursor].current_value = 0;
-    pfu_menu_option_choice(emu.menu.entries[emu.menu.cursor].key, emu.menu.entries[emu.menu.cursor].current_value);
-  }
+  else if (buttons.d_left && entry->type == PFU_ENTRY_TYPE_CHOICE)
+    pfu_menu_option_choice(entry, entry->current_value - 1);
+  else if (buttons.d_right && entry->type == PFU_ENTRY_TYPE_CHOICE)
+    pfu_menu_option_choice(entry, entry->current_value + 1);
   else if (buttons.a)
   {
-    switch (emu.menu.entries[emu.menu.cursor].type)
+    switch (entry->type)
     {
     case PFU_ENTRY_TYPE_BOOL:
-      pfu_menu_option_bool(emu.menu.entries[emu.menu.cursor].key, true);
+      pfu_menu_option_bool(entry, !entry->current_value);
       break;
     case PFU_ENTRY_TYPE_CHOICE:
-      emu.menu.entries[emu.menu.cursor].current_value++;
-      if (emu.menu.entries[emu.menu.cursor].current_value >= PFU_MENU_MAX_CHOICES)
-        emu.menu.entries[emu.menu.cursor].current_value = 0;
-      pfu_menu_option_choice(emu.menu.entries[emu.menu.cursor].key, emu.menu.entries[emu.menu.cursor].current_value);
+      pfu_menu_option_choice(entry, entry->current_value + 1);
       break;
     case PFU_ENTRY_TYPE_FILE:
-      pfu_menu_file(emu.menu.entries[emu.menu.cursor].title);
+      pfu_menu_file(entry->title);
       break;
     default:
-      break;
+      return;
     }
   }
   else if (buttons.b)
     pfu_state_set(PFU_STATE_EMU);
 }
+
+#define PFU_ROWS 12
 
 void pfu_menu_run(void)
 {
@@ -262,16 +252,22 @@ void pfu_menu_run(void)
   rdpq_fill_rectangle(0, 0, display_get_width(), display_get_height());
 
   rdpq_set_mode_fill(RGBA32(sine_color, sine_color, 0x00, 1));
-  rdpq_fill_rectangle(48 + 4, 32 + 64 + (emu.menu.cursor % 8) * 24 + 3, display_get_width() - (48 + 4), 32 + 64 + (emu.menu.cursor % 8) * 24 + 24 + 3);
+  rdpq_fill_rectangle(48 + 4, 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 3, display_get_width() - (48 + 4), 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 24 + 3);
 
   rdpq_set_mode_copy(true);
-  rdpq_text_printf(NULL, 1, 48, 32 + 24, emu.menu.menu_title);
-  rdpq_text_printf(NULL, 1, 48, 32 + 24 * 2, emu.menu.menu_subtitle);
-  for (i = (emu.menu.cursor / 8) * 8; i < (emu.menu.cursor / 8) * 8 + 8; i++)
+
+  rdpq_sprite_blit(emu.icon, 48, 32, NULL);
+
+  rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24, emu.menu.menu_title);
+  rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24 * 2, emu.menu.menu_subtitle);
+  for (i = (emu.menu.cursor / PFU_ROWS) * PFU_ROWS; i < (emu.menu.cursor / PFU_ROWS) * PFU_ROWS + PFU_ROWS && i < emu.menu.entry_count; i++)
   {
-    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + i * 24, emu.menu.entries[i].title);
-    if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_CHOICE)
-      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + i * 24, emu.menu.entries[i].choices[emu.menu.entries[i].current_value]);
+    int j = i % PFU_ROWS;
+    rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + j * 24, emu.menu.entries[i].title);
+    if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_BOOL)
+      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, emu.menu.entries[i].current_value ? "Enabled" : "Disabled");
+    else if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_CHOICE)
+      rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, emu.menu.entries[i].choices[emu.menu.entries[i].current_value]);
   }
   rdpq_detach_show();
 

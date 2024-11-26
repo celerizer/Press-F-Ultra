@@ -76,6 +76,7 @@ int main(void)
   rdpq_font_t *font = rdpq_font_load("rom:/Tuffy_Bold.font64");
   rdpq_text_register_font(1, font);
   emu.icon = sprite_load("rom:/icon.sprite");
+  debug_init_sdfs("sd:/", -1);
 
   /* Initialize audio */
   audio_init(PF_SOUND_FREQUENCY, 2);
