@@ -203,6 +203,9 @@ bool pfu_menu_init_roms(void)
 
 static uint8_t sine_color;
 
+#define PFU_DROP 3
+#define PFU_ROWS 12
+
 static void pfu_menu_input(void)
 {
   joypad_buttons_t buttons;
@@ -214,10 +217,34 @@ static void pfu_menu_input(void)
     emu.menu.cursor--;
   else if (buttons.d_down && emu.menu.cursor < emu.menu.entry_count - 1)
     emu.menu.cursor++;
-  else if (buttons.d_left && entry->type == PFU_ENTRY_TYPE_CHOICE)
-    pfu_menu_option_choice(entry, entry->current_value - 1);
-  else if (buttons.d_right && entry->type == PFU_ENTRY_TYPE_CHOICE)
-    pfu_menu_option_choice(entry, entry->current_value + 1);
+  else if (buttons.d_left)
+    switch (entry->type)
+    {
+    case PFU_ENTRY_TYPE_BOOL:
+      pfu_menu_option_bool(entry, false);
+      break;
+    case PFU_ENTRY_TYPE_CHOICE:
+      pfu_menu_option_choice(entry, entry->current_value - 1);
+      break;
+    case PFU_ENTRY_TYPE_FILE:
+      emu.menu.cursor -= PFU_ROWS;
+    default:
+      return;
+    }
+  else if (buttons.d_right)
+    switch (entry->type)
+    {
+    case PFU_ENTRY_TYPE_BOOL:
+      pfu_menu_option_bool(entry, true);
+      break;
+    case PFU_ENTRY_TYPE_CHOICE:
+      pfu_menu_option_choice(entry, entry->current_value + 1);
+      break;
+    case PFU_ENTRY_TYPE_FILE:
+      emu.menu.cursor += PFU_ROWS;
+    default:
+      return;
+    }
   else if (buttons.a)
   {
     switch (entry->type)
@@ -238,9 +265,6 @@ static void pfu_menu_input(void)
   else if (buttons.b)
     pfu_state_set(PFU_STATE_EMU);
 }
-
-#define PFU_DROP 3
-#define PFU_ROWS 12
 
 void pfu_menu_run(void)
 {
