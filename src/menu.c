@@ -6,14 +6,27 @@
 #include "main.h"
 #include "menu.h"
 
-int pfu_load_rom(unsigned address, const char *path)
+enum
+{
+  PFU_SOURCE_INVALID = 0,
+
+  PFU_SOURCE_ROMFS,
+  PFU_SOURCE_SD_CARD,
+
+  PFU_SOURCE_SIZE
+};
+
+int pfu_load_rom(unsigned address, const char *path, unsigned source)
 {
   FILE *file;
   char buffer[0x0400];
   char fullpath[256];
   int success = 0;
 
-  snprintf(fullpath, sizeof(fullpath), "sd:/press-f/%s", path);
+  if (source == PFU_SOURCE_INVALID || source >= PFU_SOURCE_SIZE)
+    return 0;
+
+  snprintf(fullpath, sizeof(fullpath), "%s/%s", (source == PFU_SOURCE_SD_CARD) ? "sd:/press-f" : "rom:/roms", path);
   file = fopen(fullpath, "r");
   if (file)
   {
@@ -96,11 +109,11 @@ static void pfu_menu_option_choice(pfu_menu_entry_t *entry, signed value)
   entry->current_value = value;
 }
 
-static void pfu_menu_file(const char *path)
+static void pfu_menu_file(pfu_menu_entry_t *entry)
 {
-  if (path)
+  if (entry)
   {
-    pfu_load_rom(0x0800, path);
+    pfu_load_rom(0x0800, entry->title, entry->current_value);
     pfu_state_set(PFU_STATE_EMU);
     pressf_reset(&emu.system);
   }
@@ -145,18 +158,10 @@ bool pfu_menu_init_settings(void)
   return true;
 }
 
-bool pfu_menu_init_roms(void)
+static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path, int src)
 {
-  bool success = false;
   dir_t dir;
-  pfu_menu_ctx_t menu;
-  int err = dir_findfirst("sd:/press-f", &dir);
-  int count = 1;
-
-  /* Set up dummy file entry to not load a ROM */
-  snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS");
-  menu.entries[0].type = PFU_ENTRY_TYPE_BACK;
-  menu.entries[0].key = PFU_ENTRY_KEY_NONE;
+  int err = dir_findfirst(src_path, &dir); 
 
   while (!err)
   {
@@ -166,32 +171,46 @@ bool pfu_menu_init_roms(void)
       if (!strncmp(dir.d_name, "sl31253.bin", 8))
       {
         if (!emu.bios_a_loaded)
-          emu.bios_a_loaded = pfu_load_rom(0x0000, dir.d_name);
+          emu.bios_a_loaded = pfu_load_rom(0x0000, dir.d_name, src);
       }
       else if (!strncmp(dir.d_name, "sl31254.bin", 8))
       {
         if (!emu.bios_b_loaded)
-          emu.bios_b_loaded = pfu_load_rom(0x0400, dir.d_name);
+          emu.bios_b_loaded = pfu_load_rom(0x0400, dir.d_name, src);
       }
       else if (strlen(dir.d_name) && dir.d_name[0] != '.')
       {
         /* List all other files */
-        snprintf(menu.entries[count].title, sizeof(dir.d_name), "%s", dir.d_name);
-        menu.entries[count].type = PFU_ENTRY_TYPE_FILE;
-        menu.entries[count].key = PFU_ENTRY_KEY_NONE;
-        count++;
+        snprintf(menu->entries[menu->entry_count].title, sizeof(dir.d_name), "%s", dir.d_name);
+        menu->entries[menu->entry_count].type = PFU_ENTRY_TYPE_FILE;
+        menu->entries[menu->entry_count].current_value = src;
+        menu->entry_count++;
       }
     }
-    err = dir_findnext("sd:/press-f", &dir); 
+    err = dir_findnext(src_path, &dir); 
   }
+}
+
+bool pfu_menu_init_roms(void)
+{
+  bool success = false;
+  pfu_menu_ctx_t menu;
+
+  /* Set up dummy file entry to not load a ROM */
+  snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS");
+  menu.entries[0].type = PFU_ENTRY_TYPE_BACK;
+  menu.entries[0].key = PFU_ENTRY_KEY_NONE;
+  menu.entry_count = 1;
+
+  pfu_menu_init_roms_source(&menu, "rom:/roms", PFU_SOURCE_ROMFS);
+  pfu_menu_init_roms_source(&menu, "sd:/press-f", PFU_SOURCE_SD_CARD);
 
   /* Fail if BIOS are not located */
   if (emu.bios_a_loaded && emu.bios_b_loaded)
   {
-    menu.entry_count = count;
-    menu.cursor = 0;
     snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
     snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
+    menu.cursor = 0;
     emu.menu = menu;
     emu.state = PFU_STATE_MENU;
 
@@ -240,10 +259,8 @@ static void pfu_menu_input(void)
     case PFU_ENTRY_TYPE_CHOICE:
       pfu_menu_option_choice(entry, entry->current_value + 1);
       break;
-    case PFU_ENTRY_TYPE_FILE:
-      emu.menu.cursor += PFU_ROWS;
     default:
-      return;
+      emu.menu.cursor += PFU_ROWS;
     }
   else if (buttons.a)
   {
@@ -256,7 +273,7 @@ static void pfu_menu_input(void)
       pfu_menu_option_choice(entry, entry->current_value + 1);
       break;
     case PFU_ENTRY_TYPE_FILE:
-      pfu_menu_file(entry->title);
+      pfu_menu_file(entry);
       break;
     default:
       return;
@@ -273,7 +290,6 @@ static void pfu_menu_input(void)
 
 void pfu_menu_run(void)
 {
-#if PRESS_F_ULTRA_PREVIEW
   surface_t *disp = display_get();
   int i;
 
@@ -306,50 +322,4 @@ void pfu_menu_run(void)
 
   sine_color = (int)(sin(emu.frames * 0.1) * 127.0) + 128;
   pfu_menu_input();
-#else
-  /** 
-   * This is the codepath for the old console-based menu. Only the ROM
-   * selection menu is implemented here, and will be removed in the future.
-   */
-  bool finished = false;
-
-  console_init();
-  console_set_render_mode(RENDER_MANUAL);
-  pfu_menu_init_roms();
-
-  do
-  {
-    /* Process menu controller logic */
-    struct controller_data keys;
-    int i;
-
-    controller_scan();
-    keys = get_keys_down();
-
-    if (keys.c[0].up && emu.menu.cursor > 0)
-      emu.menu.cursor--;
-    else if (keys.c[0].down && emu.menu.cursor < emu.menu.entry_count - 1)
-      emu.menu.cursor++;
-    else if (keys.c[0].A)
-    {
-      if (emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_FILE)
-        pfu_load_rom(0x0800, emu.menu.entries[emu.menu.cursor].title);
-      else if (emu.menu.entries[emu.menu.cursor].type == PFU_ENTRY_TYPE_BACK)
-      {
-        /* Zero some data so it doesn't persist between boots */
-        int dummy = 0;
-        f8_write(&emu.system, 0x0800, &dummy, sizeof(dummy));
-      }
-      finished = true;
-    }
-
-    /* Render menu entries */
-    console_clear();
-    printf("\n\n");
-    for (i = 0; i < emu.menu.entry_count; i++)
-      printf("%c %s\n", i == emu.menu.cursor ? '>' : '-', emu.menu.entries[i].title);
-    console_render();
-  } while (!finished);
-  pfu_state_set(PFU_STATE_EMU);
-#endif
 }
