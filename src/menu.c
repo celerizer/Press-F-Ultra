@@ -239,6 +239,7 @@ static void pfu_menu_input(void)
     pfu_state_set(PFU_STATE_EMU);
 }
 
+#define PFU_DROP 3
 #define PFU_ROWS 12
 
 void pfu_menu_run(void)
@@ -252,7 +253,7 @@ void pfu_menu_run(void)
   rdpq_fill_rectangle(0, 0, display_get_width(), display_get_height());
 
   rdpq_set_mode_fill(RGBA32(sine_color, sine_color, 0x00, 1));
-  rdpq_fill_rectangle(48 + 4, 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 3, display_get_width() - (48 + 4), 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 24 + 3);
+  rdpq_fill_rectangle(48 + 4, 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 6, display_get_width() - (48 + 4), 32 + 64 + (emu.menu.cursor % PFU_ROWS) * 24 + 24 + 6);
 
   rdpq_set_mode_copy(true);
 
@@ -263,6 +264,9 @@ void pfu_menu_run(void)
   for (i = (emu.menu.cursor / PFU_ROWS) * PFU_ROWS; i < (emu.menu.cursor / PFU_ROWS) * PFU_ROWS + PFU_ROWS && i < emu.menu.entry_count; i++)
   {
     int j = i % PFU_ROWS;
+
+    if (i == emu.menu.cursor)
+      rdpq_text_printf(NULL, 2, 48 + 8 + PFU_DROP, 32 + 64 + 24 + j * 24 + PFU_DROP, emu.menu.entries[i].title);
     rdpq_text_printf(NULL, 1, 48 + 8, 32 + 64 + 24 + j * 24, emu.menu.entries[i].title);
     if (emu.menu.entries[i].type == PFU_ENTRY_TYPE_BOOL)
       rdpq_text_printf(NULL, 1, 386, 32 + 64 + 24 + j * 24, emu.menu.entries[i].current_value ? "Enabled" : "Disabled");

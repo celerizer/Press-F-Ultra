@@ -73,8 +73,19 @@ int main(void)
 
   /* Initialize assets */
   dfs_init(DFS_DEFAULT_LOCATION);
-  rdpq_font_t *font = rdpq_font_load("rom:/Tuffy_Bold.font64");
-  rdpq_text_register_font(1, font);
+
+  /* Initialize fonts */
+  rdpq_font_t *font1 = rdpq_font_load("rom:/Tuffy_Bold.font64");
+  rdpq_text_register_font(1, font1);
+  rdpq_font_style(font1, 0, &(rdpq_fontstyle_t){
+	                .color = RGBA32(255, 255, 255, 255),
+	                .outline_color = RGBA32(0, 0, 0, 255)});
+  rdpq_font_t *font2 = rdpq_font_load("rom:/Tuffy_Bold.font64");
+  rdpq_text_register_font(2, font2);
+  rdpq_font_style(font2, 0, &(rdpq_fontstyle_t){
+	                .color = RGBA32(0, 0, 0, 127),
+	                .outline_color = RGBA32(0, 0, 0, 127)});
+
   emu.icon = sprite_load("rom:/icon.sprite");
   debug_init_sdfs("sd:/", -1);
 
