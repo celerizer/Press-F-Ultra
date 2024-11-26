@@ -9,15 +9,15 @@
 ### Nintendo 64 Flashcart
 
 - Download the [latest release](https://github.com/celerizer/Press-F-Ultra/releases/).
-- Place the Channel F BIOS images and any additional cartridge ROMs in a "press-f" subdirectory on the root of the SD Card. Make sure the two BIOS images have these exact filenames:
+- Place the Channel F BIOS images and any additional cartridge ROMs in a "press-f" directory on the root of the SD Card. Make sure the two BIOS images have these exact filenames:
   - `sl31253.bin`
   - `sl31254.bin` 
 - Boot `Press-F.z64` and choose a game to play.
 
 ### Emulator
 
-- Add the binary data of `sl31253.bin` and `sl31254.bin` to the source code of `main.c`, as `bios_a`, `bios_a_size`, `bios_b`, and `bios_b_size`.
-- Build the ROM per the instructions below.
+- Add the files `sl31253.bin` and `sl31254.bin` to the `roms` directory, as well as any additional cartridge ROM files.
+- Build `Press-F.z64` per the instructions below.
 - Load in the Ares emulator.
 
 ## Controls
