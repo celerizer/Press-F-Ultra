@@ -48,7 +48,7 @@ void pfu_state_set(pfu_state_type state)
  * Returns the memory location of a stamped ROM when loading as a plugin, or
  * 0 if doing so is not supported.
  */
-static unsigned pfu_plugin_rom_address(void)
+static unsigned long pfu_plugin_rom_address(void)
 {
   switch (cart_type)
   {
@@ -64,57 +64,41 @@ static unsigned pfu_plugin_rom_address(void)
 }
 
 /**
- * Verifies a section of a supposed Channel F ROM in memory by testing if
- * its contents contain a significant (and arbitrary) number of zeroes.
- * Currently, the arbitrary limit is to fail if 75% of the contents are zero.
- */
-static bool pfu_plugin_verify_section(const u8 *buffer, unsigned size)
-{
-  unsigned zeroes = 0;
-  unsigned i;
-
-  for (i = 0; i < size; i++)
-  {
-    if (buffer[i] == 0)
-      zeroes++;
-  }
-
-  return zeroes < (size / 4) * 3;
-}
-
-/**
- * Attempts to load a Channel F ROM stamped in memory by the previous program
- * loader. Returns true if a ROM was successfully read, if the plugin feature
- * is available.
- * @todo Perhaps test for the 0x55 identifier
+ * Attempts to load a Channel F ROM stamped in an address by the previous
+ * program loader. Returns true if a ROM was successfully read, if the plugin
+ * feature is available.
+ * 
+ * The Channel F sanity byte $55 is checked to ensure the ROM is valid, which
+ * may exclude some older homebrew ROMs.
+ * 
+ * As the accurate ROMC mode is not used on Nintendo 64, a maximum-sized ROM
+ * can be loaded contiguously into the entire F8 address space, then
+ * overwritten later.
  */
 static bool pfu_plugin_read_rom(void)
 {
-  const unsigned base = pfu_plugin_rom_address();
-  unsigned address = 0;
+  u8 buffer[0xF800];
+  const unsigned long base = pfu_plugin_rom_address();
 
   if (!base)
     return false;
   else
   {
-    u8 buffer[0x0200];
-    bool success;
+    dma_read_async(buffer, base, sizeof(buffer));
+    dma_wait();
 
-    do
+    if (buffer[0] == 0x55)
     {
-      dma_read_async(buffer, base + address, sizeof(buffer));
+      f8_write(&emu.system, 0x0800, buffer, sizeof(buffer));
+      memset(buffer, 0, sizeof(buffer));
+      dma_write_raw_async(buffer, base, sizeof(buffer));
       dma_wait();
 
-      success = pfu_plugin_verify_section(buffer, sizeof(buffer));
-      if (success)
-      {
-        f8_write(&emu.system, 0x0800 + address, buffer, sizeof(buffer));
-        address += sizeof(buffer);
-      }
-    } while (success && address < 0xF800);
+      return true;
+    }
   }
 
-  return address > 0;
+  return false;
 }
 
 int main(void)
