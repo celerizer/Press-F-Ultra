@@ -37,7 +37,7 @@
 The L Trigger and R Trigger can be used to open a ROM menu and settings menu respectively.
 
 ## Building
-
+Open the devcontainer (rebuild required if you want to update libdragon, as it is not a submodule), or:
 - Set up a [libdragon environment](https://github.com/DragonMinded/libdragon/wiki/Installing-libdragon) on the preview branch.
 - Clone the project and the core emulation submodule:
 ```sh

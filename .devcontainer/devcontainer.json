@@ -1,0 +1,25 @@
+{
+    "name": "press-f-ultra",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "mounts": [
+        "source=press-f-ultra-bashhistory,target=/commandhistory,type=volume"
+    ],
+    "workspaceMount": "source=${localWorkspaceFolder}/,target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "postCreateCommand": "rm -rf ./libdragon && git clone https://github.com/dragonminded/libdragon -b preview --depth 1 && cd ./libdragon && make clobber -j && make libdragon tools -j && make install tools-install -j && make -j4",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.makefile-tools"
+            ],
+            "settings": {
+                "git.ignoredRepositories": [
+                    "libdragon"
+                ]
+            }
+        }
+    }
+}
