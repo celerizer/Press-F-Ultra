@@ -35,6 +35,7 @@ MKFONT_FLAGS ?= --range all
 
 src = \
 	$(SRC_DIR)/emu.c \
+	$(SRC_DIR)/error.c \
 	$(SRC_DIR)/main.c \
 	$(SRC_DIR)/menu.c
 

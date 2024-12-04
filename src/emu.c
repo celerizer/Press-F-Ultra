@@ -114,3 +114,8 @@ void pfu_emu_run(void)
   else
     pfu_video_render_4_3();
 }
+
+void pfu_emu_switch(void)
+{
+  emu.state = PFU_STATE_EMU;
+}

@@ -3,4 +3,6 @@
 
 void pfu_emu_run(void);
 
+void pfu_emu_switch(void);
+
 #endif

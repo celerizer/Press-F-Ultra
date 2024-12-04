@@ -3,6 +3,8 @@
 #include "libpressf/src/emu.h"
 #include "libpressf/src/font.h"
 
+#include "emu.h"
+#include "error.h"
 #include "main.h"
 #include "menu.h"
 
@@ -57,7 +59,7 @@ static void pfu_menu_entry_back(void)
   unsigned dummy = 0;
 
   f8_write(&emu.system, 0x0800, &dummy, sizeof(dummy));
-  pfu_state_set(PFU_STATE_EMU);
+  pfu_emu_switch();
   pressf_reset(&emu.system);
 }
 
@@ -125,7 +127,7 @@ static void pfu_menu_entry_file(pfu_menu_entry_t *entry)
   if (entry)
   {
     pfu_load_rom(0x0800, entry->title, entry->current_value);
-    pfu_state_set(PFU_STATE_EMU);
+    pfu_emu_switch();
     pressf_reset(&emu.system);
   }
 }
@@ -176,7 +178,7 @@ static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path
   {
     if (dir.d_type == DT_REG)
     {
-      /* Load BIOS if found on SD Card */
+      /* Load BIOS if found */
       if (!strncmp(dir.d_name, "sl31253.bin", 8))
       {
         if (!emu.bios_a_loaded)
@@ -222,6 +224,12 @@ static void pfu_menu_init_roms(void)
     snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
     emu.menu_roms = menu;
   }
+  else
+    pfu_error_switch("Press F Ultra requires Channel F BIOS data to be stored on\n"
+                     "the SD Card in the \"press-f\" directory.\n\n"
+                     "Please include both the $03sl31253.bin$01 and $03sl31254.bin$01 BIOS images.\n\n"
+                     "Alternatively, this data can be compiled in statically.\n\n"
+                     "See https://github.com/celerizer/Press-F-Ultra for details.");
 }
 
 static uint8_t sine_color;
@@ -293,7 +301,7 @@ static void pfu_menu_input(void)
     }
   }
   else if (buttons.b)
-    pfu_state_set(PFU_STATE_EMU);
+    pfu_emu_switch();
   
   if (menu->cursor < 0)
     menu->cursor = 0;

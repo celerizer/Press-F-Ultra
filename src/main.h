@@ -41,6 +41,4 @@ typedef struct
 
 extern pfu_emu_ctx_t emu;
 
-void pfu_state_set(pfu_state_type state);
-
 #endif
