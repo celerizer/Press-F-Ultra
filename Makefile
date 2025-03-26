@@ -67,10 +67,10 @@ $(BUILD_DIR)/Press-F.dfs: $(assets_conv)
 $(BUILD_DIR)/Press-F.elf: $(src:%.c=$(BUILD_DIR)/%.o)
 
 # Get the current git version
-GIT_VERSION := $(shell git describe --tags --dirty --always)
+GIT_VERSION := $(shell git rev-parse --short=8 HEAD)
 
 # Define the N64 ROM title with the git version
-N64_ROM_TITLE_WITH_VERSION := "Press F $(GIT_VERSION)"
+N64_ROM_TITLE_WITH_VERSION := "Press F Ultra $(GIT_VERSION)"
 
 Press-F.z64: N64_ROM_TITLE = $(N64_ROM_TITLE_WITH_VERSION)
 Press-F.z64: $(BUILD_DIR)/Press-F.dfs
