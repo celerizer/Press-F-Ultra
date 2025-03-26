@@ -349,6 +349,8 @@ void pfu_menu_run(void)
     {
       if (print_string[k] == '$' || print_string[k] == '^')
         print_string[k] = '-';
+      else if (print_string[k] == '_')
+        print_string[k] = ' ';
     }
 
     if (i == menu->cursor)

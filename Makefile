@@ -1,5 +1,13 @@
-all: Press-F.z64
-.PHONY: all
+.PHONY: all rename_spaces clean
+
+all: rename_spaces Press-F.z64
+
+rename_spaces:
+	@find ./roms -maxdepth 1 -type f -name "* *" | while read file; do \
+		newfile=$$(echo "$$file" | tr ' ' '_'); \
+		mv "$$file" "$$newfile"; \
+		echo "Renamed: $$file -> $$newfile"; \
+	done
 
 CFLAGS += \
 	-DPF_BIG_ENDIAN=1 \
@@ -70,7 +78,7 @@ $(BUILD_DIR)/Press-F.elf: $(src:%.c=$(BUILD_DIR)/%.o)
 GIT_VERSION := $(shell git rev-parse --short=8 HEAD)
 
 # Define the N64 ROM title with the git version
-N64_ROM_TITLE_WITH_VERSION := "Press F Ultra $(GIT_VERSION)"
+N64_ROM_TITLE_WITH_VERSION := "Press F $(GIT_VERSION)"
 
 Press-F.z64: N64_ROM_TITLE = $(N64_ROM_TITLE_WITH_VERSION)
 Press-F.z64: $(BUILD_DIR)/Press-F.dfs
