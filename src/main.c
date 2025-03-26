@@ -111,7 +111,7 @@ int main(void)
 
   /* Initialize emulator */
   pressf_init(&emu.system);
-  f8_system_init(&emu.system, &pf_systems[0]);
+  f8_system_init(&emu.system, F8_SYSTEM_CHANNEL_F);
   pfu_menu_init();
 
   /* If loaded as plugin, jump to loaded ROM, otherwise load ROM menu */
