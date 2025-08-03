@@ -14,44 +14,108 @@ enum
 
   PFU_SOURCE_ROMFS,
   PFU_SOURCE_SD_CARD,
+  PFU_SOURCE_CONTROLLER_PAK,
 
   PFU_SOURCE_SIZE
 };
 
-static int pfu_load_rom(unsigned address, const char *path, unsigned source)
+#define PFU_GAME_ID 0xCFF8
+
+static int pfu_controller_pak_read(void)
 {
-  FILE *file;
-  char buffer[0x0400];
-  char fullpath[256];
-  int success = 0;
-
-  if (source == PFU_SOURCE_INVALID || source >= PFU_SOURCE_SIZE)
-    return 0;
-
-  snprintf(fullpath, sizeof(fullpath), "%s/%s", 
-           source == PFU_SOURCE_SD_CARD ? "sd:/press-f" : "rom:/roms",
-           path);
-  file = fopen(fullpath, "r");
-  if (file)
+  if (joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
   {
-    int file_size;
+    entry_structure_t entry;
     int i;
 
-    fseek(file, 0, SEEK_END);
-    file_size = ftell(file);
-    rewind(file);
-
-    for (i = 0; i < file_size; i += 0x0400)
+    for (i = 0; i < 16; i++)
     {
-      int bytes_read = fread(buffer, sizeof(char), 0x0400, file);
-
-      f8_write(&emu.system, address + i, buffer, bytes_read);
+      if (get_mempak_entry(JOYPAD_PORT_1, i, &entry) == 0)
+      {
+        if (entry.game_id == PFU_GAME_ID && entry.blocks > 0)
+          return read_mempak_entry_data(JOYPAD_PORT_1, &entry,
+                                        (u8*)&emu.system.memory[0x0800]) == 0;
+      }
+      else
+        return 0;
     }
-    fclose(file);
-    success = 1;
   }
 
-  return success;
+  return 0;
+}
+
+static int pfu_controller_pak_write(const char *path, unsigned source)
+{
+  if (joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
+  {
+    u8 *rom_data;
+    unsigned size;
+    entry_structure_t entry;
+    char formatted_path[sizeof(entry.name)];
+    unsigned i;
+
+    /**
+     * Format ROM name to Controller Pak format: 19 characters, uppercase
+     * letters and spaces only. Trim any tags like (USA).
+     */
+    for (i = 0; i < sizeof(entry.name) - 1 && path[i] != '\0' && path[i] != '('; i++)
+    {
+      if (path[i] >= 'a' && path[i] <= 'z')
+        formatted_path[i] = path[i] - 32;
+      else if ((path[i] >= 'A' && path[i] <= 'Z') || path[i] == ' ')
+        formatted_path[i] = path[i];
+      else
+        formatted_path[i] = ' ';
+    }
+    formatted_path[sizeof(entry.name) - 1] = '\0';
+    strncpy(entry.name, formatted_path, sizeof(entry.name));
+    entry.region = 0;
+    entry.blocks = size % MEMPAK_BLOCK_SIZE == 0 ? size / MEMPAK_BLOCK_SIZE : size / MEMPAK_BLOCK_SIZE + 1;
+
+    return write_mempak_entry_data(JOYPAD_PORT_1, &entry, rom_data) == 0;
+  }
+
+  return 0;
+}
+
+static int pfu_load_rom(unsigned address, const char *path, unsigned source)
+{
+  if (source == PFU_SOURCE_INVALID || source >= PFU_SOURCE_SIZE)
+    return 0;
+  else if (source == PFU_SOURCE_CONTROLLER_PAK)
+    return pfu_controller_pak_read();
+  else
+  {
+    FILE *file;
+    char buffer[0x0400];
+    char fullpath[256];
+    int success = 0;
+
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", 
+             source == PFU_SOURCE_SD_CARD ? "sd:/press-f" : "rom:/roms",
+             path);
+    file = fopen(fullpath, "r");
+    if (file)
+    {
+      int file_size;
+      int i;
+
+      fseek(file, 0, SEEK_END);
+      file_size = ftell(file);
+      rewind(file);
+
+      for (i = 0; i < file_size; i += 0x0400)
+      {
+        int bytes_read = fread(buffer, sizeof(char), 0x0400, file);
+
+        f8_write(&emu.system, address + i, buffer, bytes_read);
+      }
+      fclose(file);
+      success = 1;
+    }
+
+    return success;
+  }
 }
 
 static void pfu_menu_entry_back(void)
@@ -221,7 +285,7 @@ static void pfu_menu_init_roms(void)
   if (emu.bios_a_loaded && emu.bios_b_loaded)
   {
     snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
-    snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM to load.");
+    snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM. Press A to load, or Z to copy to Controller Pak.");
     emu.menu_roms = menu;
   }
   else
