@@ -315,7 +315,8 @@ static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path
         if (!emu.bios_b_loaded)
           emu.bios_b_loaded = pfu_load_rom(0x0400, dir.d_name, src);
       }
-      else if (strlen(dir.d_name) && dir.d_name[0] != '.')
+      else if (strlen(dir.d_name) && dir.d_name[0] != '.' &&
+               (src != PFU_SOURCE_CONTROLLER_PAK || strstr(dir.d_name, ".CHF")))
       {
         /* List all other files */
         const char *basename = strrchr(dir.d_name, '/');
