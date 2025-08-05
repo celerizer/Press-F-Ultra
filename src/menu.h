@@ -29,7 +29,7 @@ typedef enum
 
 typedef struct
 {
-  char title[128];
+  char title[256];
   char choices[PFU_MENU_MAX_CHOICES][32];
   pfu_entry_key key;
   pfu_entry_type type;

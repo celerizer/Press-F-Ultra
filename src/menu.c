@@ -1,4 +1,7 @@
 #include <libdragon.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "libpressf/src/emu.h"
 #include "libpressf/src/font.h"
@@ -19,6 +22,9 @@ enum
   PFU_SOURCE_SIZE
 };
 
+#define PFU_PATH_CONTROLLER_PAK "cpak1:/HF8E.01"
+#define PFU_PATH_ROMFS "rom:/roms"
+#define PFU_PATH_SD_CARD "sd:/press-f"
 #define PFU_GAME_ID 0xCFF8
 
 static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned source)
@@ -28,133 +34,141 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
   else
   {
     FILE *file;
-    char fullpath[256];
+    const char *prefix = NULL;
+    char fullpath[1024];
 
-    snprintf(fullpath, sizeof(fullpath), "%s/%s", 
-             source == PFU_SOURCE_SD_CARD ? "sd:/press-f" : "rom:/roms",
-             path);
+    switch (source)
+    {
+    case PFU_SOURCE_CONTROLLER_PAK:
+      prefix = PFU_PATH_CONTROLLER_PAK;
+      break;
+    case PFU_SOURCE_ROMFS:
+      prefix = PFU_PATH_ROMFS;
+      break;
+    case PFU_SOURCE_SD_CARD:
+      prefix = PFU_PATH_SD_CARD;
+      break;
+    default:
+      pfu_error_switch("Invalid source for loading file: %u", source);
+    }
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", prefix, path);
+
+    if (source == PFU_SOURCE_CONTROLLER_PAK)
+      cpak_mount(JOYPAD_PORT_1, "cpak1:/");
     file = fopen(fullpath, "r");
     if (file)
     {
       size_t bytes_read = fread(dst, sizeof(char), size, file);
       fclose(file);
+      if (source == PFU_SOURCE_CONTROLLER_PAK)
+        cpak_unmount(JOYPAD_PORT_1);
 
       return bytes_read;
     }
+    else
+      pfu_error_switch("Failed to open file for reading:\n%s\n", fullpath);
   }
 
-  return 0;
-}
-
-static int pfu_controller_pak_find(char *name)
-{
-  if (joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
-  {
-    int i;
-
-    if (validate_mempak(JOYPAD_PORT_1))
-      format_mempak(JOYPAD_PORT_1);
-    for (i = 0; i < 16; i++)
-    {
-      entry_structure_t entry;
-
-      get_mempak_entry(JOYPAD_PORT_1, i, &entry);
-      if (entry.valid && entry.blocks > 0)
-      {
-        if (name)
-          snprintf(name, sizeof(entry.name), "%s", entry.name);
-        return 1;
-      }
-    }
-  }
-
-  return 0;
-}
-
-static int pfu_controller_pak_read(void)
-{
-  if (joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
-  {
-    entry_structure_t entry;
-    int i;
-
-    for (i = 0; i < 16; i++)
-    {
-      get_mempak_entry(JOYPAD_PORT_1, i, &entry);
-      if (entry.blocks > 0)
-        return read_mempak_entry_data(JOYPAD_PORT_1, &entry,
-                                      (u8*)&emu.system.memory[0x0800]) == 0;
-    }
-    pfu_error_switch("No ROM found in Controller Pak.\n\n"
-                     "Please insert a Controller Pak with a valid ROM and try again.");
-  }
-  else
-    pfu_error_switch("Press F Ultra requires a Controller Pak to be inserted in\n"
-                     "the first joypad port to load ROMs from it.\n\n"
-                     "Please insert a Controller Pak and try again.");
   return 0;
 }
 
 static int pfu_controller_pak_write(const char *path, unsigned source)
 {
-  if (joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
+  if (!cpak_mount(JOYPAD_PORT_1, "cpak1:/"))
   {
+    FILE *output_file;
     u8 rom_data[0x4000];
     unsigned size;
-    entry_structure_t entry;
-    char formatted_path[sizeof(entry.name)];
+    char formatted_path[64];
+    char temp_path[32] = { 0 };
+    size_t bytes_written;
     unsigned i;
 
-    memset(&entry, 0, sizeof(entry));
+    if (validate_mempak(JOYPAD_PORT_1))
+      format_mempak(JOYPAD_PORT_1);
 
+    /* Load the file to be copied to Controller Pak */
     size = pfu_load_file(rom_data, sizeof(rom_data), path, source);
     if (!size)
     {
-      pfu_error_switch("Failed to load ROM data from Controller Pak.\n\n"
+      pfu_error_switch("Failed to load ROM data.\n\n"
                        "Please check the file path and try again.");
-      return 0;
-    }
-
-    for (i = 0; i < 16; i++)
-    {
-      get_mempak_entry(JOYPAD_PORT_1, i, &entry);
-      if (!entry.valid)
-        break;
+      goto error;
     }
 
     /**
-     * Format ROM name to Controller Pak format: 19 characters, uppercase
+     * Format ROM name to Controller Pak format: 16 characters, uppercase
      * letters and spaces only. Trim any tags like (USA).
      */
-    for (i = 0; i < sizeof(entry.name) - 1 && path[i] != '\0' && path[i] != '('; i++)
+    for (i = 0; i < 16 && path[i] != '\0' && path[i] != '(' && path[i] != '.'; i++)
     {
       if (path[i] >= 'a' && path[i] <= 'z')
-        formatted_path[i] = path[i] - 32;
+        temp_path[i] = path[i] - 32;
       else if ((path[i] >= 'A' && path[i] <= 'Z') || path[i] == ' ')
-        formatted_path[i] = path[i];
+        temp_path[i] = path[i];
       else
-        formatted_path[i] = ' ';
+        temp_path[i] = ' ';
     }
-    memcpy(entry.name, formatted_path, sizeof(entry.name));
-    entry.region = 'E';
-    entry.blocks = size % MEMPAK_BLOCK_SIZE == 0 ? size / MEMPAK_BLOCK_SIZE : size / MEMPAK_BLOCK_SIZE + 1;
+    /* Remove trailing space */
+    if (temp_path[i - 1] == ' ')
+      temp_path[i - 1] = '\0';
+    snprintf(formatted_path, sizeof(formatted_path), "%s/%s.CHF", PFU_PATH_CONTROLLER_PAK, temp_path);
 
-    int error = write_mempak_entry_data(JOYPAD_PORT_1, &entry, rom_data);
+    /* Create new file on Controller Pak */
+    output_file = fopen(formatted_path, "wb");
+    if (!output_file || ferror(output_file))
+    {
+      char buffer[128];
 
-    if (!error)
-      pfu_error_switch("ROM successfully saved to Controller Pak.\n\n"
-                       "Name: %s\n"
-                       "Size: %u blocks\n\n"
-                       "You can now load it from the ROMs menu.",
-                       entry.name, entry.blocks);
+      snprintf(buffer, sizeof(buffer), "%s", strerror(errno));
+      pfu_error_switch("Failed to open file for writing:\n%s\n", formatted_path);
+      goto error;
+    }
+
+    /* Write ROM to the file */
+    bytes_written = fwrite(rom_data, sizeof(char), size, output_file);
+    fclose(output_file);
+    if (bytes_written != size)
+    {
+      cpak_stats_t stats;
+      char buffer[128];
+
+      cpak_get_stats(JOYPAD_PORT_1, &stats);
+
+      snprintf(buffer, sizeof(buffer), "%s\nPages used: %u / %u\nNotes used: %u / %u",
+               strerror(errno), stats.pages.used, stats.pages.total,
+               stats.notes.used, stats.notes.total);
+      pfu_error_switch("Failed to write complete data to file:\n%u bytes / %u bytes\n%s\n\n%s",
+                       bytes_written, size, formatted_path, buffer);
+      goto error;
+    }
     else
-      pfu_error_switch("Failed to save ROM data to Controller Pak.\n\n"
-                       "Error: %d", error);
+    {
+      cpak_stats_t stats;
+      unsigned pages_used, pages_free, notes_free;
+
+      cpak_get_stats(JOYPAD_PORT_1, &stats);
+      pages_used = size % 256 == 0 ? size / 256 : size / 256 + 1;
+      pages_free = stats.pages.total - stats.pages.used;
+      notes_free = stats.notes.total - stats.notes.used;
+      pfu_error_switch("ROM successfully saved to Controller Pak.\n"
+                       "You can now load it from the ROMs menu.\n\n"
+                       "Name: %s\n"
+                       "Size: 1 note, %u pages\n\n"
+                       "Remaining space on Controller Pak:\n"
+                       "Pages free: %i / %i\nNotes free: %i / %i",
+                       formatted_path, pages_used, pages_free,
+                       stats.pages.total, notes_free, stats.notes.total);
+      cpak_unmount(JOYPAD_PORT_1);
+
+      return 1;
+    }
   }
   pfu_error_switch("Press F Ultra requires a Controller Pak to be inserted in\n"
                    "the first joypad port to save ROMs to it.\n\n"
                    "Please insert a Controller Pak and try again.");
-
+error:
+  cpak_unmount(JOYPAD_PORT_1);
   return 0;
 }
 
@@ -162,8 +176,6 @@ static int pfu_load_rom(unsigned address, const char *path, unsigned source)
 {
   if (source == PFU_SOURCE_INVALID || source >= PFU_SOURCE_SIZE)
     return 0;
-  else if (source == PFU_SOURCE_CONTROLLER_PAK)
-    return pfu_controller_pak_read();
   else
     return pfu_load_file(&emu.system.memory[address], 0x4000, path, source);
 }
@@ -241,8 +253,6 @@ static void pfu_menu_entry_file(pfu_menu_entry_t *entry)
   if (entry)
   {
     pfu_load_rom(0x0800, entry->title, entry->current_value);
-    if (entry->current_value != PFU_SOURCE_CONTROLLER_PAK)
-      pfu_controller_pak_write(entry->title, entry->current_value);
     pfu_emu_switch();
     pressf_reset(&emu.system);
   }
@@ -308,7 +318,17 @@ static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path
       else if (strlen(dir.d_name) && dir.d_name[0] != '.')
       {
         /* List all other files */
-        snprintf(menu->entries[menu->entry_count].title, sizeof(dir.d_name), "%s", dir.d_name);
+        const char *basename = strrchr(dir.d_name, '/');
+
+        if (basename)
+          basename++;
+        else
+          basename = dir.d_name;
+
+        snprintf(menu->entries[menu->entry_count].title,
+                 sizeof(menu->entries[menu->entry_count].title),
+                 "%s", basename);
+        menu->entries[menu->entry_count].title[sizeof(menu->entries[menu->entry_count].title) - 1] = '\0';
         menu->entries[menu->entry_count].type = PFU_ENTRY_TYPE_FILE;
         menu->entries[menu->entry_count].current_value = src;
         menu->entry_count++;
@@ -321,8 +341,11 @@ static void pfu_menu_init_roms_source(pfu_menu_ctx_t *menu, const char *src_path
 static void pfu_menu_init_roms(void)
 {
   pfu_menu_ctx_t menu;
-  char controller_pak_name[32];
 
+  if (emu.menu_roms.entries)
+    free(emu.menu_roms.entries);
+
+  memset(&menu, 0, sizeof(menu));
   menu.entries = calloc(256, sizeof(pfu_menu_entry_t));
 
   /* Set up dummy file entry to not load a ROM */
@@ -331,24 +354,20 @@ static void pfu_menu_init_roms(void)
   menu.entries[0].key = PFU_ENTRY_KEY_NONE;
   menu.entry_count = 1;
 
-  /* Set up Controller Pak entry */
-  if (pfu_controller_pak_find(controller_pak_name))
-  {
-    snprintf(menu.entries[1].title, sizeof(menu.entries[1].title), "Load from Controller Pak (%s)", controller_pak_name);
-    menu.entries[1].type = PFU_ENTRY_TYPE_FILE;
-    menu.entries[1].current_value = PFU_SOURCE_CONTROLLER_PAK;
-    menu.entries[1].key = PFU_ENTRY_KEY_NONE;
-    menu.entry_count++;
-  }
-
-  pfu_menu_init_roms_source(&menu, "rom:/roms", PFU_SOURCE_ROMFS);
-  pfu_menu_init_roms_source(&menu, "sd:/press-f", PFU_SOURCE_SD_CARD);
+  if (!cpak_mount(JOYPAD_PORT_1, "cpak1:/"))
+    pfu_menu_init_roms_source(&menu, "cpak1:/", PFU_SOURCE_CONTROLLER_PAK);
+  cpak_unmount(JOYPAD_PORT_1);
+  pfu_menu_init_roms_source(&menu, PFU_PATH_ROMFS, PFU_SOURCE_ROMFS);
+  pfu_menu_init_roms_source(&menu, PFU_PATH_SD_CARD, PFU_SOURCE_SD_CARD);
 
   /* Fail if BIOS are not located */
   if (emu.bios_a_loaded && emu.bios_b_loaded)
   {
     snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - ROMs");
-    snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM. Press A to load, or Z to copy to Controller Pak.");
+    if (joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
+      snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Press A to load, or Z to copy to Controller Pak.");
+    else
+      snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a ROM. Press A to load.");
     emu.menu_roms = menu;
   }
   else
@@ -429,6 +448,13 @@ static void pfu_menu_input(void)
   }
   else if (buttons.b)
     pfu_emu_switch();
+  else if (buttons.l)
+    pfu_menu_init_roms();
+  else if (buttons.z)
+    if (entry->type == PFU_ENTRY_TYPE_FILE &&
+        entry->current_value != PFU_SOURCE_CONTROLLER_PAK &&
+        joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
+      pfu_controller_pak_write(entry->title, entry->current_value);
   
   if (menu->cursor < 0)
     menu->cursor = 0;
@@ -466,7 +492,7 @@ void pfu_menu_run(void)
   rdpq_text_printf(NULL, 1, 64 + 48 + 8, 32 + 24 * 2, menu->menu_subtitle);
   for (i = (menu->cursor / PFU_ROWS) * PFU_ROWS; i < (menu->cursor / PFU_ROWS) * PFU_ROWS + PFU_ROWS && i < menu->entry_count; i++)
   {
-    char print_string[128];
+    char print_string[sizeof(menu->entries[0].title)];
     int j = i % PFU_ROWS;
     int k;
 
