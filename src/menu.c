@@ -84,7 +84,7 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     size_t bytes_written;
     cpak_stats_t stats;
     int pages_needed;
-    unsigned i;
+    unsigned i, j, last_char_was_space = 0;
 
     /* Format Controller Pak if needed */
     if (validate_mempak(JOYPAD_PORT_1))
@@ -122,18 +122,44 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
      * Format ROM name to Controller Pak format: 16 characters, uppercase
      * letters and spaces only. Trim any tags like (USA).
      */
-    for (i = 0; i < 16 && path[i] != '\0' && path[i] != '(' && path[i] != '.'; i++)
+    for (i = 0, j = 0; i < 256 && path[i] != '\0' && j < 16 && path[i] != '(' && path[i] != '.'; i++)
     {
-      if (path[i] >= 'a' && path[i] <= 'z')
-        temp_path[i] = path[i] - 32;
-      else if ((path[i] >= 'A' && path[i] <= 'Z') || path[i] == ' ')
-        temp_path[i] = path[i];
+      char c = path[i];
+
+      /* Convert lowercase letters to uppercase */
+      if (c >= 'a' && c <= 'z')
+        c -= 0x20;
+
+      /* Acceptable characters: A-Z, 0-9, space, hyphen */
+      if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == ' ')
+      {
+        /* Collapse multiple spaces */
+        if (c == ' ')
+        {
+          if (last_char_was_space)
+            continue;
+          last_char_was_space = 1;
+        }
+        else
+          last_char_was_space = 0;
+
+        temp_path[j++] = c;
+      }
       else
-        temp_path[i] = ' ';
+      {
+        /* Replace other characters with space, but avoid multiple spaces */
+        if (!last_char_was_space)
+        {
+          temp_path[j++] = ' ';
+          last_char_was_space = 1;
+        }
+      }
     }
-    /* Remove trailing space */
-    if (temp_path[i - 1] == ' ')
-      temp_path[i - 1] = '\0';
+    temp_path[j] = '\0';
+
+    /* Remove trailing space if present */
+    if (j > 0 && temp_path[j - 1] == ' ')
+      temp_path[j - 1] = '\0';
     snprintf(formatted_path, sizeof(formatted_path), "%s/%s.CHF", PFU_PATH_CONTROLLER_PAK, temp_path);
 
     /* Create new file on Controller Pak */
