@@ -82,8 +82,11 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     char formatted_path[64];
     char temp_path[32] = { 0 };
     size_t bytes_written;
+    cpak_stats_t stats;
+    int pages_needed;
     unsigned i;
 
+    /* Format Controller Pak if needed */
     if (validate_mempak(JOYPAD_PORT_1))
       format_mempak(JOYPAD_PORT_1);
 
@@ -93,6 +96,25 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     {
       pfu_error_switch("Failed to load ROM data.\n\n"
                        "Please check the file path and try again.");
+      goto error;
+    }
+
+    /* Check if the Controller Pak has space to hold it */
+    cpak_get_stats(JOYPAD_PORT_1, &stats);
+    pages_needed = size % 256 == 0 ? size / 256 : size / 256 + 1;
+    if (stats.pages.used + pages_needed > stats.pages.total ||
+        stats.notes.used + 1 > stats.notes.total)
+    {
+      unsigned pages_free, notes_free;
+
+      pages_free = stats.pages.total - stats.pages.used;
+      notes_free = stats.notes.total - stats.notes.used;
+      pfu_error_switch("Not enough space on Controller Pak.\n\n"
+                       "Required: %u pages, 1 note\n"
+                       "Available: %u pages, %u notes\n\n"
+                       "Please free some space and try again.",
+                       pages_needed, pages_free, notes_free);
+
       goto error;
     }
 
@@ -121,7 +143,8 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
       char buffer[128];
 
       snprintf(buffer, sizeof(buffer), "%s", strerror(errno));
-      pfu_error_switch("Failed to open file for writing:\n%s\n", formatted_path);
+      pfu_error_switch("Failed to open file for writing:\n%s", formatted_path);
+
       goto error;
     }
 
@@ -130,34 +153,27 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     fclose(output_file);
     if (bytes_written != size)
     {
-      cpak_stats_t stats;
       char buffer[128];
 
-      cpak_get_stats(JOYPAD_PORT_1, &stats);
+      snprintf(buffer, sizeof(buffer), "%s", strerror(errno));
+      pfu_error_switch("Failed to write data to file.\n%s", buffer);
 
-      snprintf(buffer, sizeof(buffer), "%s\nPages used: %u / %u\nNotes used: %u / %u",
-               strerror(errno), stats.pages.used, stats.pages.total,
-               stats.notes.used, stats.notes.total);
-      pfu_error_switch("Failed to write complete data to file:\n%u bytes / %u bytes\n%s\n\n%s",
-                       bytes_written, size, formatted_path, buffer);
       goto error;
     }
     else
     {
-      cpak_stats_t stats;
-      unsigned pages_used, pages_free, notes_free;
+      unsigned pages_free, notes_free;
 
       cpak_get_stats(JOYPAD_PORT_1, &stats);
-      pages_used = size % 256 == 0 ? size / 256 : size / 256 + 1;
       pages_free = stats.pages.total - stats.pages.used;
       notes_free = stats.notes.total - stats.notes.used;
       pfu_error_switch("ROM successfully saved to Controller Pak.\n"
                        "You can now load it from the ROMs menu.\n\n"
                        "Name: %s\n"
-                       "Size: 1 note, %u pages\n\n"
+                       "Size: 1 note, %i pages\n\n"
                        "Remaining space on Controller Pak:\n"
                        "Pages free: %i / %i\nNotes free: %i / %i",
-                       formatted_path, pages_used, pages_free,
+                       formatted_path, pages_needed, pages_free,
                        stats.pages.total, notes_free, stats.notes.total);
       cpak_unmount(JOYPAD_PORT_1);
 
