@@ -387,7 +387,6 @@ static void pfu_menu_init_roms(void)
 
   if (emu.menu_roms.entries)
     free(emu.menu_roms.entries);
-
   memset(&menu, 0, sizeof(menu));
   menu.entries = calloc(256, sizeof(pfu_menu_entry_t));
 
@@ -507,6 +506,8 @@ static void pfu_menu_input(void)
 
 void pfu_menu_init(void)
 {
+  memset(&emu.menu_roms, 0, sizeof(emu.menu_roms));
+  memset(&emu.menu_settings, 0, sizeof(emu.menu_settings));
   pfu_menu_init_roms();
   pfu_menu_init_settings();
 }
