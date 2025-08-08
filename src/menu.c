@@ -49,7 +49,8 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
       prefix = PFU_PATH_SD_CARD;
       break;
     default:
-      pfu_error_switch("Invalid source for loading file: %u", source);
+      pfu_message_switch(PFU_STATE_MENU,
+        "Invalid source for loading file: %u", source);
     }
     snprintf(fullpath, sizeof(fullpath), "%s/%s", prefix, path);
 
@@ -66,7 +67,8 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
       return bytes_read;
     }
     else
-      pfu_error_switch("Failed to open file for reading:\n%s\n", fullpath);
+      pfu_message_switch(PFU_STATE_MENU, 
+        "Failed to open file for reading:\n%s\n", fullpath);
   }
 
   return 0;
@@ -88,34 +90,35 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
 
     /* Format Controller Pak if needed */
     if (validate_mempak(JOYPAD_PORT_1))
-      pfu_error_switch("The Controller Pak needs to be formatted.\n\n"
-                       "Please format it in a compatible game and try again.");
+      pfu_message_switch(PFU_STATE_MENU,
+        "The Controller Pak needs to be formatted.\n\n"
+        "Please format it in a compatible game and try again.");
 
     /* Load the file to be copied to Controller Pak */
     size = pfu_load_file(rom_data, sizeof(rom_data), path, source);
     if (!size)
     {
-      pfu_error_switch("Failed to load ROM data.\n\n"
-                       "Please check the file path and try again.");
+      pfu_message_switch(PFU_STATE_MENU,
+        "Failed to load ROM data.\n\n"
+        "Please check the file path and try again.");
       goto error;
     }
 
     /* Check if the Controller Pak has space to hold it */
     cpak_get_stats(JOYPAD_PORT_1, &stats);
-    stats.pages.total = 123; /** @todo fixme: libdragon reporting this wrong */
     pages_needed = size % 256 == 0 ? size / 256 : size / 256 + 1;
     if (stats.pages.used + pages_needed > stats.pages.total ||
         stats.notes.used + 1 > stats.notes.total)
     {
-      unsigned pages_free, notes_free;
+      signed pages_free, notes_free;
 
       pages_free = stats.pages.total - stats.pages.used;
       notes_free = stats.notes.total - stats.notes.used;
-      pfu_error_switch("Not enough space on Controller Pak.\n\n"
-                       "Required: %u pages, 1 note\n"
-                       "Available: %u pages, %u notes\n\n"
-                       "Please free some space and try again.",
-                       pages_needed, pages_free, notes_free);
+      pfu_message_switch(PFU_STATE_MENU, "Not enough space on Controller Pak.\n\n"
+        "Required: %i pages, 1 note\n"
+        "Available: %i pages, %i notes\n\n"
+        "Please free some space and try again.",
+        pages_needed, pages_free, notes_free);
 
       goto error;
     }
@@ -168,11 +171,8 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     output_file = fopen(formatted_path, "wb");
     if (!output_file || ferror(output_file))
     {
-      char buffer[128];
-
-      snprintf(buffer, sizeof(buffer), "%s", strerror(errno));
-      pfu_error_switch("Failed to open file for writing:\n%s", formatted_path);
-
+      pfu_message_switch(PFU_STATE_MENU,
+        "Failed to open file for writing:\n%s", strerror(errno));
       goto error;
     }
 
@@ -181,11 +181,8 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     fclose(output_file);
     if (bytes_written != size)
     {
-      char buffer[128];
-
-      snprintf(buffer, sizeof(buffer), "%s", strerror(errno));
-      pfu_error_switch("Failed to write data to file.\n%s", buffer);
-
+      pfu_message_switch(PFU_STATE_MENU,
+        "Failed to write data to file:\n%s", strerror(errno));
       goto error;
     }
     else
@@ -195,22 +192,25 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
       cpak_get_stats(JOYPAD_PORT_1, &stats);
       pages_free = stats.pages.total - stats.pages.used;
       notes_free = stats.notes.total - stats.notes.used;
-      pfu_error_switch("ROM successfully saved to Controller Pak.\n"
-                       "You can now load it from the ROMs menu.\n\n"
-                       "Name: %s\n"
-                       "Size: 1 note, %i pages\n\n"
-                       "Remaining space on Controller Pak:\n"
-                       "Pages free: %i / %i\nNotes free: %i / %i",
-                       formatted_path, pages_needed, pages_free,
-                       stats.pages.total, notes_free, stats.notes.total);
+      pfu_message_switch(PFU_STATE_MENU,
+        "ROM successfully saved to Controller Pak.\n"
+        "You can now load it from the ROMs menu.\n\n"
+        "Name: %s\n"
+        "Size: 1 note, %i pages\n\n"
+        "Remaining space on Controller Pak:\n"
+        "Pages free: %i / %i\n"
+        "Notes free: %i / %i",
+        formatted_path, pages_needed, pages_free,
+        stats.pages.total, notes_free, stats.notes.total);
       cpak_unmount(JOYPAD_PORT_1);
 
       return 1;
     }
   }
-  pfu_error_switch("Press F Ultra requires a Controller Pak to be inserted in\n"
-                   "the first joypad port to save ROMs to it.\n\n"
-                   "Please insert a Controller Pak and try again.");
+  pfu_message_switch(PFU_STATE_MENU,
+    "Press F Ultra requires a Controller Pak to be inserted in\n"
+    "the first joypad port to save ROMs to it.\n\n"
+    "Please insert a Controller Pak and try again.");
 error:
   cpak_unmount(JOYPAD_PORT_1);
   return 0;
@@ -415,11 +415,13 @@ static void pfu_menu_init_roms(void)
     emu.menu_roms = menu;
   }
   else
-    pfu_error_switch("Press F Ultra requires Channel F BIOS data to be stored on\n"
-                     "the SD Card in the \"press-f\" directory.\n\n"
-                     "Please include both the $03sl31253.bin$01 and $03sl31254.bin$01 BIOS images.\n\n"
-                     "Alternatively, this data can be compiled in statically.\n\n"
-                     "See https://github.com/celerizer/Press-F-Ultra for details.");
+    pfu_error_switch(
+      "Press F Ultra requires Channel F BIOS data to be stored on\n"
+      "the SD Card in the \"press-f\" directory.\n\n"
+      "Please include both the $03sl31253.bin$01 and "
+      "$03sl31254.bin$01 BIOS images.\n\n"
+      "Alternatively, this data can be compiled in statically.\n\n"
+      "See https://github.com/celerizer/Press-F-Ultra for details.");
 }
 
 static uint8_t sine_color;
