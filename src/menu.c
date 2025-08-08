@@ -25,7 +25,8 @@ enum
 #define PFU_PATH_CONTROLLER_PAK "cpak1:/HF8E.01"
 #define PFU_PATH_ROMFS "rom:/roms"
 #define PFU_PATH_SD_CARD "sd:/press-f"
-#define PFU_GAME_ID 0xCFF8
+
+static bool pfu_pak_connected = false;
 
 static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned source)
 {
@@ -524,6 +525,22 @@ void pfu_menu_run(void)
 
   if (!menu)
     return;
+
+  /**
+   * Every second check if Controller Pak state has changed.
+   * If so, reload the ROM list.
+   */
+  if (emu.frames % 60 == 0)
+  {
+    bool pak = joypad_get_accessory_type(JOYPAD_PORT_1) ==
+                 JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK;
+
+    if (pak != pfu_pak_connected)
+    {
+      pfu_pak_connected = pak;
+      pfu_menu_init_roms();
+    }
+  }
 
   rdpq_attach_clear(disp, NULL);
   rdpq_set_mode_fill(RGBA32(0x22, 0x22, 0x22, 1));
