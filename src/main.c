@@ -85,7 +85,6 @@ int main(void)
   joypad_init();
 
   /* Initialize assets */
-  cart_init();
   int dfs_result = dfs_init(DFS_DEFAULT_LOCATION);
   if (dfs_result < 0)
   {
