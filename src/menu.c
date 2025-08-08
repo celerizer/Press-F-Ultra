@@ -102,6 +102,7 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
 
     /* Check if the Controller Pak has space to hold it */
     cpak_get_stats(JOYPAD_PORT_1, &stats);
+    stats.pages.total = 123; /** @todo fixme: libdragon reporting this wrong */
     pages_needed = size % 256 == 0 ? size / 256 : size / 256 + 1;
     if (stats.pages.used + pages_needed > stats.pages.total ||
         stats.notes.used + 1 > stats.notes.total)
