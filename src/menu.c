@@ -88,7 +88,8 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
 
     /* Format Controller Pak if needed */
     if (validate_mempak(JOYPAD_PORT_1))
-      format_mempak(JOYPAD_PORT_1);
+      pfu_error_switch("The Controller Pak needs to be formatted.\n\n"
+                       "Please format it in a compatible game and try again.");
 
     /* Load the file to be copied to Controller Pak */
     size = pfu_load_file(rom_data, sizeof(rom_data), path, source);
