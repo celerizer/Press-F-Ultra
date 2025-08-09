@@ -60,4 +60,5 @@ git clone https://github.com/celerizer/Press-F-Ultra.git --recurse-submodules
 ## License
 
 - **Press F Ultra** and **libpressf** are distributed under the MIT license. See LICENSE for information.
+- [**FastLZ**](https://github.com/ariya/FastLZ) is used under the MIT license.
 - The font **Tuffy Bold** is used under the public domain.
