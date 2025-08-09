@@ -49,6 +49,7 @@ static void pfu_video_render_4_3(void)
 static void pfu_emu_input(void)
 {
   joypad_buttons_t buttons;
+  unsigned port;
 
   joypad_poll();
   buttons = joypad_get_buttons(JOYPAD_PORT_1);
@@ -72,26 +73,28 @@ static void pfu_emu_input(void)
   set_input_button(0, INPUT_START, buttons.start);
 
   /* Handle player 1 input */
-  set_input_button(4, INPUT_RIGHT, buttons.d_right);
-  set_input_button(4, INPUT_LEFT, buttons.d_left);
-  set_input_button(4, INPUT_BACK, buttons.d_down);
-  set_input_button(4, INPUT_FORWARD, buttons.d_up);
-  set_input_button(4, INPUT_ROTATE_CCW, buttons.c_left);
-  set_input_button(4, INPUT_ROTATE_CW, buttons.c_right);
-  set_input_button(4, INPUT_PULL, buttons.c_up);
-  set_input_button(4, INPUT_PUSH, buttons.c_down);
+  port = emu.swap_controllers ? 1 : 4;
+  set_input_button(port, INPUT_RIGHT, buttons.d_right);
+  set_input_button(port, INPUT_LEFT, buttons.d_left);
+  set_input_button(port, INPUT_BACK, buttons.d_down);
+  set_input_button(port, INPUT_FORWARD, buttons.d_up);
+  set_input_button(port, INPUT_ROTATE_CCW, buttons.c_left);
+  set_input_button(port, INPUT_ROTATE_CW, buttons.c_right);
+  set_input_button(port, INPUT_PULL, buttons.c_up);
+  set_input_button(port, INPUT_PUSH, buttons.c_down);
 
   buttons = joypad_get_buttons(JOYPAD_PORT_2);
 
   /* Handle player 2 input */
-  set_input_button(1, INPUT_RIGHT, buttons.d_right);
-  set_input_button(1, INPUT_LEFT, buttons.d_left);
-  set_input_button(1, INPUT_BACK, buttons.d_down);
-  set_input_button(1, INPUT_FORWARD, buttons.d_up);
-  set_input_button(1, INPUT_ROTATE_CCW, buttons.c_left);
-  set_input_button(1, INPUT_ROTATE_CW, buttons.c_right);
-  set_input_button(1, INPUT_PULL, buttons.c_up);
-  set_input_button(1, INPUT_PUSH, buttons.c_down);
+  port = emu.swap_controllers ? 4 : 1;
+  set_input_button(port, INPUT_RIGHT, buttons.d_right);
+  set_input_button(port, INPUT_LEFT, buttons.d_left);
+  set_input_button(port, INPUT_BACK, buttons.d_down);
+  set_input_button(port, INPUT_FORWARD, buttons.d_up);
+  set_input_button(port, INPUT_ROTATE_CCW, buttons.c_left);
+  set_input_button(port, INPUT_ROTATE_CW, buttons.c_right);
+  set_input_button(port, INPUT_PULL, buttons.c_up);
+  set_input_button(port, INPUT_PUSH, buttons.c_down);
 }
 
 void pfu_emu_run(void)

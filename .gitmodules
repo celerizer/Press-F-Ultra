@@ -1,3 +1,6 @@
 [submodule "src/libpressf"]
 	path = src/libpressf
 	url = https://github.com/celerizer/libpressf
+[submodule "src/FastLZ"]
+	path = src/FastLZ
+	url = https://github.com/ariya/FastLZ

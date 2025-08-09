@@ -75,22 +75,30 @@ int main(void)
 {
   memset(&emu, 0, sizeof(emu));
 
+  /* Initialize console */
+  rdpq_init();
+  console_init();
+  console_set_render_mode(RENDER_AUTOMATIC);
+  console_clear();
+
   /* Initialize controller */
   joypad_init();
-  
-  /* Initialize video */
-  display_init(RESOLUTION_640x480, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
-  rdpq_init();
-  emu.video_buffer = (u16*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
-  emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, SCREEN_WIDTH, SCREEN_HEIGHT);
-  emu.video_scaling = PFU_SCALING_4_3;
 
   /* Initialize assets */
-  cart_init();
-  dfs_init(DFS_DEFAULT_LOCATION);
+  int dfs_result = dfs_init(DFS_DEFAULT_LOCATION);
+  if (dfs_result < 0)
+  {
+    printf("Failed to initialize DFS: %d\n", dfs_result);
+    return -1;
+  }
 
   /* Initialize fonts */
   rdpq_font_t *font1 = rdpq_font_load("rom:/Tuffy_Bold.font64");
+  if (!font1)
+  {
+    printf("Failed to load font: Tuffy_Bold.font64\n");
+    return -1;
+  }
   rdpq_text_register_font(1, font1);
   rdpq_font_style(font1, 0, &(rdpq_fontstyle_t){
 	                .color = RGBA32(255, 255, 255, 255),
@@ -104,10 +112,22 @@ int main(void)
   rdpq_text_register_font(3, font3);
 
   emu.icon = sprite_load("rom:/icon.sprite");
+  if (!emu.icon)
+  {
+    printf("Failed to load icon sprite: icon.sprite\n");
+    return -1;
+  }
   debug_init_sdfs("sd:/", -1);
 
   /* Initialize audio */
   audio_init(PF_SOUND_FREQUENCY, 4);
+
+  /* Initialize video */
+  console_close();
+  display_init(RESOLUTION_640x480, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
+  emu.video_buffer = (u16*)malloc_uncached_aligned(64, SCREEN_WIDTH * SCREEN_HEIGHT * 2);
+  emu.video_frame = surface_make_linear(emu.video_buffer, FMT_RGBA16, SCREEN_WIDTH, SCREEN_HEIGHT);
+  emu.video_scaling = PFU_SCALING_4_3;
 
   /* Initialize emulator */
   pressf_init(&emu.system);

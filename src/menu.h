@@ -8,6 +8,7 @@ typedef enum
 {
   PFU_ENTRY_KEY_NONE = 0,
 
+  PFU_ENTRY_KEY_SWAP_CONTROLLERS,
   PFU_ENTRY_KEY_PIXEL_PERFECT,
   PFU_ENTRY_KEY_SYSTEM_MODEL,
   PFU_ENTRY_KEY_FONT,
@@ -29,7 +30,7 @@ typedef enum
 
 typedef struct
 {
-  char title[128];
+  char title[256];
   char choices[PFU_MENU_MAX_CHOICES][32];
   pfu_entry_key key;
   pfu_entry_type type;

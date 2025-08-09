@@ -37,6 +37,7 @@ typedef struct
   pfu_menu_ctx_t *current_menu;
   unsigned frames;
   sprite_t *icon;
+  bool swap_controllers;
 } pfu_emu_ctx_t;
 
 extern pfu_emu_ctx_t emu;
