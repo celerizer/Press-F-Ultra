@@ -10,6 +10,7 @@
 #include "error.h"
 #include "main.h"
 #include "menu.h"
+#include "FastLZ/fastlz.h"
 
 enum
 {
@@ -26,7 +27,15 @@ enum
 #define PFU_PATH_ROMFS "rom:/roms"
 #define PFU_PATH_SD_CARD "sd:/press-f"
 
+static const int pfu_compression_magic = 0xF8CFF8CF;
 static bool pfu_pak_connected = false;
+
+typedef struct
+{
+  int magic;
+  int original_size;
+  int compressed_size;
+} pfu_compression_header_t;
 
 static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned source)
 {
@@ -57,13 +66,53 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
 
     if (source == PFU_SOURCE_CONTROLLER_PAK)
       cpak_mount(JOYPAD_PORT_1, "cpak1:/");
-    file = fopen(fullpath, "r");
+    file = fopen(fullpath, "rb");
     if (file)
     {
       size_t bytes_read = fread(dst, sizeof(char), size, file);
       fclose(file);
+
       if (source == PFU_SOURCE_CONTROLLER_PAK)
+      {
+        pfu_compression_header_t header;
+        u8 *output;
+        u8 *compressed_ptr;
+        int decompressed_size;
+
+        /* Read compression header */
+        memcpy(&header, dst, sizeof(header));
+        if (header.magic != pfu_compression_magic)
+        {
+          pfu_message_switch(PFU_STATE_MENU,
+            "Invalid Controller Pak file format:\n%s\n\n"
+            "Expected magic: 0x%08X, got: 0x%08X",
+            fullpath, pfu_compression_magic, header.magic);
+          bytes_read = 0;
+        }
+
+        /* Decompress file */
+        output = (u8*)malloc(header.original_size);
+        compressed_ptr = ((u8*)dst) + sizeof(header);
+        decompressed_size = fastlz_decompress(compressed_ptr,
+          header.compressed_size, output, header.original_size);
+        if (decompressed_size <= 0)
+        {
+          pfu_message_switch(PFU_STATE_MENU,
+            "Failed to decompress Controller Pak data:\n%s\n\n"
+            "Header original size: %i\n"
+            "Header compressed size: %i\n"
+            "Decompressed size: %i\n", strerror(errno),
+            header.original_size, header.compressed_size, decompressed_size);
+          bytes_read = 0;
+        }
+        else
+        {
+          memcpy(dst, output, decompressed_size);
+          bytes_read = decompressed_size;
+        }
         cpak_unmount(JOYPAD_PORT_1);
+        free(output);
+      }
 
       return bytes_read;
     }
@@ -81,10 +130,12 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
   {
     FILE *output_file;
     u8 rom_data[0x4000];
+    u8 compressed_rom_data[0x4000];
     unsigned size;
+    pfu_compression_header_t header;
     char formatted_path[64];
     char temp_path[32] = { 0 };
-    size_t bytes_written;
+    size_t bytes_written = 0;
     cpak_stats_t stats;
     int pages_needed;
     unsigned i, j, last_char_was_space = 0;
@@ -96,14 +147,26 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
         "Please format it in a compatible game and try again.");
 
     /* Load the file to be copied to Controller Pak */
-    size = pfu_load_file(rom_data, sizeof(rom_data), path, source);
-    if (!size)
+    header.original_size = pfu_load_file(rom_data, sizeof(rom_data), path, source);
+    if (!header.original_size)
     {
       pfu_message_switch(PFU_STATE_MENU,
         "Failed to load ROM data.\n\n"
         "Please check the file path and try again.");
       goto error;
     }
+
+    /* Compress the file */
+    header.compressed_size = fastlz_compress_level(2, rom_data, header.original_size, compressed_rom_data);
+    if (!header.compressed_size)
+    {
+      pfu_message_switch(PFU_STATE_MENU,
+        "Failed to compress ROM data.");
+      goto error;
+    }
+
+    /* Add space for header */
+    size = header.compressed_size + sizeof(pfu_compression_header_t);
 
     /* Check if the Controller Pak has space to hold it */
     cpak_get_stats(JOYPAD_PORT_1, &stats);
@@ -178,12 +241,15 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     }
 
     /* Write ROM to the file */
-    bytes_written = fwrite(rom_data, sizeof(char), size, output_file);
+    header.magic = pfu_compression_magic;
+    bytes_written += fwrite(&header, 1, sizeof(header), output_file);
+    bytes_written += fwrite(compressed_rom_data, sizeof(char), header.compressed_size, output_file);
     fclose(output_file);
     if (bytes_written != size)
     {
       pfu_message_switch(PFU_STATE_MENU,
-        "Failed to write data to file:\n%s", strerror(errno));
+        "Failed to write data to file:\n%s\n\n"
+        "Expected: %u\nWritten: %u", strerror(errno), size, bytes_written);
       goto error;
     }
     else
