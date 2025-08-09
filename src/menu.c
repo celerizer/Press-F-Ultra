@@ -27,14 +27,14 @@ enum
 #define PFU_PATH_ROMFS "rom:/roms"
 #define PFU_PATH_SD_CARD "sd:/press-f"
 
-static const int pfu_compression_magic = 0xF8CFF8CF;
+static const u16 pfu_compression_magic = 0xF8CF;
 static bool pfu_pak_connected = false;
 
 typedef struct
 {
-  int magic;
-  int original_size;
-  int compressed_size;
+  u16 magic;
+  u16 original_size;
+  u16 compressed_size;
 } pfu_compression_header_t;
 
 static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned source)
