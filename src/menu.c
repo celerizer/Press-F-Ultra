@@ -585,10 +585,13 @@ static void pfu_menu_input(void)
   else if (buttons.l)
     pfu_menu_init_roms();
   else if (buttons.z)
+  {
     if (entry->type == PFU_ENTRY_TYPE_FILE &&
         entry->current_value != PFU_SOURCE_CONTROLLER_PAK &&
         joypad_get_accessory_type(JOYPAD_PORT_1) == JOYPAD_ACCESSORY_TYPE_CONTROLLER_PAK)
       pfu_controller_pak_write(entry->title, entry->current_value);
+    pfu_menu_init_roms();
+  }
   
   if (menu->cursor < 0)
     menu->cursor = 0;
