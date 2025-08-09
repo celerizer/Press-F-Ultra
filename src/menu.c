@@ -240,6 +240,9 @@ static void pfu_menu_entry_bool(pfu_menu_entry_t *entry, bool value)
     return;
   else switch (entry->key)
   {
+  case PFU_ENTRY_KEY_SWAP_CONTROLLERS:
+    emu.swap_controllers = value;
+    break;
   case PFU_ENTRY_KEY_PIXEL_PERFECT:
     emu.video_scaling = value ? PFU_SCALING_1_1 : PFU_SCALING_4_3;
     break;
@@ -307,7 +310,8 @@ static void pfu_menu_init_settings(void)
 {
   pfu_menu_ctx_t menu;
   pfu_menu_entry_t *entry;
-  const unsigned entry_count = 3;
+  const unsigned entry_count = 4;
+  unsigned i = 0;
 
   memset(&menu, 0, sizeof(menu));
   menu.entries = calloc(entry_count, sizeof(pfu_menu_entry_t));
@@ -316,26 +320,43 @@ static void pfu_menu_init_settings(void)
   snprintf(menu.menu_title, sizeof(menu.menu_title), "%s", "Press F Ultra - Settings");
   snprintf(menu.menu_subtitle, sizeof(menu.menu_subtitle), "%s", "Select a setting to change.");
 
-  entry = &menu.entries[0];
+  entry = &menu.entries[i];
+  entry->key = PFU_ENTRY_KEY_SWAP_CONTROLLERS;
+  entry->type = PFU_ENTRY_TYPE_BOOL;
+  snprintf(entry->title, sizeof(entry->title), "%s", "Swap player 1 / player 2 controller");
+  i++;
+
+  entry = &menu.entries[i];
   entry->key = PFU_ENTRY_KEY_PIXEL_PERFECT;
   entry->type = PFU_ENTRY_TYPE_BOOL;
   snprintf(entry->title, sizeof(entry->title), "%s", "Pixel-perfect scaling");
+  i++;
 
-  entry = &menu.entries[1];
+  entry = &menu.entries[i];
   entry->key = PFU_ENTRY_KEY_SYSTEM_MODEL;
   entry->type = PFU_ENTRY_TYPE_CHOICE;
   snprintf(entry->title, sizeof(entry->title), "%s", "System CPU clock");
   snprintf(entry->choices[0], sizeof(entry->choices[0]), "%s", "NTSC (1.79 MHz)");
   snprintf(entry->choices[1], sizeof(entry->choices[1]), "%s", "PAL Gen I (2.00 MHz)");
   snprintf(entry->choices[2], sizeof(entry->choices[2]), "%s", "PAL Gen II (1.97 MHz)");
+  i++;
 
-  entry = &menu.entries[2];
+  entry = &menu.entries[i];
   entry->key = PFU_ENTRY_KEY_FONT;
   entry->type = PFU_ENTRY_TYPE_CHOICE;
   snprintf(entry->title, sizeof(entry->title), "%s", "System font");
   snprintf(entry->choices[0], sizeof(entry->choices[0]), "%s", "Fairchild");
   snprintf(entry->choices[1], sizeof(entry->choices[1]), "%s", "Cute");
   snprintf(entry->choices[2], sizeof(entry->choices[2]), "%s", "Skinny");
+  i++;
+
+  if (i != entry_count)
+  {
+    pfu_error_switch(
+      "Error initializing settings menu: expected %u entries, got %u.",
+      entry_count, i);
+    return;
+  }
 
   emu.menu_settings = menu;
 }
@@ -527,7 +548,7 @@ void pfu_menu_run(void)
     return;
 
   /**
-   * Every second check if Controller Pak state has changed.
+   * Every second, check if Controller Pak state has changed.
    * If so, reload the ROM list.
    */
   if (emu.frames % 60 == 0)
