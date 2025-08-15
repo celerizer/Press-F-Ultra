@@ -65,7 +65,7 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
     snprintf(fullpath, sizeof(fullpath), "%s/%s", prefix, path);
 
     if (source == PFU_SOURCE_CONTROLLER_PAK)
-      cpak_mount(JOYPAD_PORT_1, "cpak1:/");
+      cpakfs_mount(JOYPAD_PORT_1, "cpak1:/");
     file = fopen(fullpath, "rb");
     if (file)
     {
@@ -110,7 +110,7 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
           memcpy(dst, output, decompressed_size);
           bytes_read = decompressed_size;
         }
-        cpak_unmount(JOYPAD_PORT_1);
+        cpakfs_unmount(JOYPAD_PORT_1);
         free(output);
       }
 
@@ -126,7 +126,7 @@ static int pfu_load_file(void *dst, unsigned size, const char *path, unsigned so
 
 static int pfu_controller_pak_write(const char *path, unsigned source)
 {
-  if (!cpak_mount(JOYPAD_PORT_1, "cpak1:/"))
+  if (!cpakfs_mount(JOYPAD_PORT_1, "cpak1:/"))
   {
     FILE *output_file;
     u8 rom_data[0x4000];
@@ -136,12 +136,12 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     char formatted_path[64];
     char temp_path[32] = { 0 };
     size_t bytes_written = 0;
-    cpak_stats_t stats;
+    cpakfs_stats_t stats;
     int pages_needed;
     unsigned i, j, last_char_was_space = 0;
 
     /* Format Controller Pak if needed */
-    if (validate_mempak(JOYPAD_PORT_1))
+    if (cpakfs_fsck(JOYPAD_PORT_1, false, NULL))
       pfu_message_switch(PFU_STATE_MENU,
         "The Controller Pak needs to be formatted.\n\n"
         "Please format it in a compatible game and try again.");
@@ -169,7 +169,7 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     size = header.compressed_size + sizeof(pfu_compression_header_t);
 
     /* Check if the Controller Pak has space to hold it */
-    cpak_get_stats(JOYPAD_PORT_1, &stats);
+    cpakfs_get_stats(JOYPAD_PORT_1, &stats);
     pages_needed = size % 256 == 0 ? size / 256 : size / 256 + 1;
     if (stats.pages.used + pages_needed > stats.pages.total ||
         stats.notes.used + 1 > stats.notes.total)
@@ -256,7 +256,7 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     {
       unsigned pages_free, notes_free;
 
-      cpak_get_stats(JOYPAD_PORT_1, &stats);
+      cpakfs_get_stats(JOYPAD_PORT_1, &stats);
       pages_free = stats.pages.total - stats.pages.used;
       notes_free = stats.notes.total - stats.notes.used;
       pfu_message_switch(PFU_STATE_MENU,
@@ -269,7 +269,7 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
         "Notes free: %i / %i",
         formatted_path, pages_needed, pages_free,
         stats.pages.total, notes_free, stats.notes.total);
-      cpak_unmount(JOYPAD_PORT_1);
+      cpakfs_unmount(JOYPAD_PORT_1);
 
       return 1;
     }
@@ -279,7 +279,7 @@ static int pfu_controller_pak_write(const char *path, unsigned source)
     "the first joypad port to save ROMs to it.\n\n"
     "Please insert a Controller Pak and try again.");
 error:
-  cpak_unmount(JOYPAD_PORT_1);
+  cpakfs_unmount(JOYPAD_PORT_1);
   return 0;
 }
 
@@ -486,9 +486,9 @@ static void pfu_menu_init_roms(void)
   menu.entries[0].key = PFU_ENTRY_KEY_NONE;
   menu.entry_count = 1;
 
-  if (!cpak_mount(JOYPAD_PORT_1, "cpak1:/"))
+  if (!cpakfs_mount(JOYPAD_PORT_1, "cpak1:/"))
     pfu_menu_init_roms_source(&menu, "cpak1:/", PFU_SOURCE_CONTROLLER_PAK);
-  cpak_unmount(JOYPAD_PORT_1);
+  cpakfs_unmount(JOYPAD_PORT_1);
   pfu_menu_init_roms_source(&menu, PFU_PATH_ROMFS, PFU_SOURCE_ROMFS);
   pfu_menu_init_roms_source(&menu, PFU_PATH_SD_CARD, PFU_SOURCE_SD_CARD);
 
