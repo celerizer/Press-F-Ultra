@@ -46,55 +46,84 @@ static void pfu_video_render_4_3(void)
   rdpq_detach_show();
 }
 
+static joypad_inputs_t pfu_analog_to_digital(joypad_inputs_t inputs, joypad_style_t style)
+{
+  if (style == JOYPAD_STYLE_N64)
+  {
+    static const int stick_threshold = JOYPAD_RANGE_N64_STICK_MAX / 2;
+
+    inputs.btn.d_up = inputs.stick_y > +stick_threshold;
+    inputs.btn.d_down = inputs.stick_y < -stick_threshold;
+    inputs.btn.d_left = inputs.stick_x < -stick_threshold;
+    inputs.btn.d_right = inputs.stick_x > +stick_threshold;
+  }
+  else if (style == JOYPAD_STYLE_GCN)
+  {
+    static const int stick_threshold = JOYPAD_RANGE_GCN_STICK_MAX / 2;
+
+    inputs.btn.d_up = inputs.stick_y > +stick_threshold;
+    inputs.btn.d_down = inputs.stick_y < -stick_threshold;
+    inputs.btn.d_left = inputs.stick_x < -stick_threshold;
+    inputs.btn.d_right = inputs.stick_x > +stick_threshold;
+  }
+
+  return inputs;
+}
+
 static void pfu_emu_input(void)
 {
-  joypad_buttons_t buttons;
+  joypad_inputs_t inputs;
+  joypad_style_t style;
   unsigned port;
 
   joypad_poll();
-  buttons = joypad_get_buttons(JOYPAD_PORT_1);
+  inputs = joypad_get_inputs(JOYPAD_PORT_1);
+  style = joypad_get_style(JOYPAD_PORT_1);
+  inputs = pfu_analog_to_digital(inputs, style);
 
   /* Handle hotkeys */
-  if (buttons.l)
+  if (inputs.btn.l)
   {
     pfu_menu_switch_roms();
     return;
   }
-  else if (buttons.r)
+  else if (inputs.btn.r)
   {
     pfu_menu_switch_settings();
     return;
   }
 
   /* Handle console input */
-  set_input_button(0, INPUT_TIME, buttons.a);
-  set_input_button(0, INPUT_MODE, buttons.b);
-  set_input_button(0, INPUT_HOLD, buttons.z);
-  set_input_button(0, INPUT_START, buttons.start);
+  set_input_button(0, INPUT_TIME, inputs.btn.a);
+  set_input_button(0, INPUT_MODE, inputs.btn.b);
+  set_input_button(0, INPUT_HOLD, inputs.btn.z);
+  set_input_button(0, INPUT_START, inputs.btn.start);
 
   /* Handle player 1 input */
   port = emu.swap_controllers ? 1 : 4;
-  set_input_button(port, INPUT_RIGHT, buttons.d_right);
-  set_input_button(port, INPUT_LEFT, buttons.d_left);
-  set_input_button(port, INPUT_BACK, buttons.d_down);
-  set_input_button(port, INPUT_FORWARD, buttons.d_up);
-  set_input_button(port, INPUT_ROTATE_CCW, buttons.c_left);
-  set_input_button(port, INPUT_ROTATE_CW, buttons.c_right);
-  set_input_button(port, INPUT_PULL, buttons.c_up);
-  set_input_button(port, INPUT_PUSH, buttons.c_down);
+  set_input_button(port, INPUT_RIGHT, inputs.btn.d_right);
+  set_input_button(port, INPUT_LEFT, inputs.btn.d_left);
+  set_input_button(port, INPUT_BACK, inputs.btn.d_down);
+  set_input_button(port, INPUT_FORWARD, inputs.btn.d_up);
+  set_input_button(port, INPUT_ROTATE_CCW, inputs.btn.c_left);
+  set_input_button(port, INPUT_ROTATE_CW, inputs.btn.c_right);
+  set_input_button(port, INPUT_PULL, inputs.btn.c_up);
+  set_input_button(port, INPUT_PUSH, inputs.btn.c_down);
 
-  buttons = joypad_get_buttons(JOYPAD_PORT_2);
+  inputs = joypad_get_inputs(JOYPAD_PORT_2);
+  style = joypad_get_style(JOYPAD_PORT_2);
+  inputs = pfu_analog_to_digital(inputs, style);
 
   /* Handle player 2 input */
   port = emu.swap_controllers ? 4 : 1;
-  set_input_button(port, INPUT_RIGHT, buttons.d_right);
-  set_input_button(port, INPUT_LEFT, buttons.d_left);
-  set_input_button(port, INPUT_BACK, buttons.d_down);
-  set_input_button(port, INPUT_FORWARD, buttons.d_up);
-  set_input_button(port, INPUT_ROTATE_CCW, buttons.c_left);
-  set_input_button(port, INPUT_ROTATE_CW, buttons.c_right);
-  set_input_button(port, INPUT_PULL, buttons.c_up);
-  set_input_button(port, INPUT_PUSH, buttons.c_down);
+  set_input_button(port, INPUT_RIGHT, inputs.btn.d_right);
+  set_input_button(port, INPUT_LEFT, inputs.btn.d_left);
+  set_input_button(port, INPUT_BACK, inputs.btn.d_down);
+  set_input_button(port, INPUT_FORWARD, inputs.btn.d_up);
+  set_input_button(port, INPUT_ROTATE_CCW, inputs.btn.c_left);
+  set_input_button(port, INPUT_ROTATE_CW, inputs.btn.c_right);
+  set_input_button(port, INPUT_PULL, inputs.btn.c_up);
+  set_input_button(port, INPUT_PUSH, inputs.btn.c_down);
 }
 
 void pfu_emu_run(void)
