@@ -478,7 +478,7 @@ static void pfu_menu_init_roms(void)
   if (emu.menu_roms.entries)
     free(emu.menu_roms.entries);
   memset(&menu, 0, sizeof(menu));
-  menu.entries = calloc(256, sizeof(pfu_menu_entry_t));
+  menu.entries = calloc(PFU_MENU_MAX_ENTRIES, sizeof(pfu_menu_entry_t));
 
   /* Set up dummy file entry to not load a ROM */
   snprintf(menu.entries[0].title, sizeof(menu.entries[0].title), "%s", "Boot to BIOS...");
